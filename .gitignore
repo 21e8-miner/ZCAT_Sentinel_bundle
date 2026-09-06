@@ -1,0 +1,11 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# State & History
+zcat_sentinel_history.jsonl
+zcat_sentinel_state.json
+
+# macOS
+.DS_Store
