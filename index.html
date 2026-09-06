@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>ZCAT Sentinel — Real-Time Mechanism Scanner</title>
+<meta name="description" content="Zero-dependency real-time scanner for Solana Token-2022 mechanism telemetry, Jupiter execution quotes, and reward tracking." />
+<style>
+:root{--bg:#080b0d;--panel:#0e1317;--panel2:#12191e;--line:#21303a;--txt:#eaf2f5;--muted:#82919a;--good:#47d18c;--warn:#f1b84b;--bad:#ff626e;--cyan:#61d7e8}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% -20%,#16242c 0,#080b0d 42%);color:var(--txt);font:14px/1.42 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;min-height:100vh}
+.wrap{max-width:1220px;margin:0 auto;padding:20px}.top{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:16px}.title{font-size:22px;letter-spacing:.08em;font-weight:800}.sub{color:var(--muted);font-size:12px;margin-top:5px}.live{display:flex;align-items:center;gap:8px;color:var(--good);font-size:12px}.dot{width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 14px currentColor}
+.links{display:flex;gap:10px;align-items:center;margin-top:8px}
+.btn-link{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:6px;text-decoration:none;border:1px solid #31515e;background:#102029;color:#dff8ff;transition:background .15s}
+.btn-link:hover{background:#17313c;color:#fff}
+.btn-link.primary{border-color:#2a705e;background:#0d2b22;color:#61e8b5}
+.btn-link.primary:hover{background:#133c30}
+.controls{display:grid;grid-template-columns:2fr 2fr 1fr 1fr 1fr auto;gap:8px;background:var(--panel);border:1px solid var(--line);padding:10px;border-radius:12px;margin-bottom:14px}
+input,button{font:inherit}input{width:100%;background:#090d10;border:1px solid var(--line);color:var(--txt);padding:8px 9px;border-radius:7px;outline:none}input:focus{border-color:#385b69}
+.lab{font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:0 0 4px 2px}.field{min-width:0}
+button{border:1px solid #31515e;background:#102029;color:#dff8ff;padding:8px 13px;border-radius:7px;cursor:pointer;align-self:end}button:hover{background:#17313c}
+.regime{display:flex;justify-content:space-between;align-items:center;background:var(--panel);border:1px solid var(--line);padding:12px 14px;border-radius:12px;margin-bottom:14px}.regime strong{font-size:17px;letter-spacing:.06em}.stamp{font-size:11px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}.card{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:11px;padding:12px;min-height:96px}.k{font-size:9px;text-transform:uppercase;letter-spacing:.13em;color:var(--muted)}.v{font-size:21px;font-weight:750;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.s{font-size:11px;color:var(--muted);margin-top:4px}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}.cyan{color:var(--cyan)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}.box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:13px}.box h3{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 10px;color:#bac8ce}.rows{display:grid;grid-template-columns:1fr auto;gap:7px 16px}.rows div:nth-child(odd){color:var(--muted)}.rows div:nth-child(even){text-align:right;max-width:420px;overflow:hidden;text-overflow:ellipsis}.alerts{display:flex;flex-direction:column;gap:7px}.alert{padding:9px 11px;border-radius:8px;border-left:3px solid var(--warn);background:#17150e}.alert.critical{border-color:var(--bad);background:#1c0f12}.alert.info{border-color:#59717b;background:#0e1518;color:#a8b6bc}.srcs{display:flex;gap:7px;flex-wrap:wrap}.src{font-size:10px;border:1px solid var(--line);border-radius:99px;padding:4px 7px;color:var(--muted)}.src.ok{color:var(--good);border-color:#214b39}.src.stale{color:var(--warn);border-color:#5a4a22}.src.fail{color:var(--bad);border-color:#5b252b}
+pre{white-space:pre-wrap;word-break:break-word;background:#080c0f;border:1px solid #19252c;border-radius:8px;padding:9px;max-height:210px;overflow:auto;color:#9dafb7;font-size:10px}details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:11px}.foot{font-size:10px;color:#687780;padding:4px 2px 20px}
+@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}.controls{grid-template-columns:1fr 1fr}.controls .wide{grid-column:span 2}.top{flex-direction:column}.v{font-size:18px}}
+@media(max-width:520px){.wrap{padding:11px}.grid{grid-template-columns:1fr 1fr;gap:7px}.card{padding:10px;min-height:88px}.controls{grid-template-columns:1fr}.controls .wide{grid-column:auto}.title{font-size:18px}}
+</style>
+</head>
+<body><div class="wrap">
+<div class="top">
+  <div>
+    <div class="title">ZCAT SENTINEL <span class="cyan">/ LIVE</span></div>
+    <div class="sub">DEX → TOKEN-2022 → REWARD ASSET → WALLET → EXECUTABLE EXIT</div>
+    <div class="links">
+      <a class="btn-link primary" href="https://github.com/21e8-miner/ZCAT_Sentinel_bundle/releases/latest/download/ZCAT_Sentinel_bundle.zip" download>
+        ⬇ Download Bundle (.zip)
+      </a>
+      <a class="btn-link" href="https://github.com/21e8-miner/ZCAT_Sentinel_bundle" target="_blank" rel="noopener">
+        GitHub Repo
+      </a>
+      <a class="btn-link" href="https://github.com/21e8-miner/ZCAT_Sentinel_bundle/releases/tag/v1.0.0" target="_blank" rel="noopener">
+        Release v1.0.0
+      </a>
+    </div>
+  </div>
+  <div class="live"><span class="dot"></span><span id="liveText">starting…</span></div>
+</div>
+<div class="controls">
+ <div class="field wide"><div class="lab">Token mint</div><input id="token" value="HcRLc9VDgjLeK154xDawfb1dmVJ98DoSqcwTHGqiDeJR"></div>
+ <div class="field wide"><div class="lab">Reward mint</div><input id="reward" value="A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS"></div>
+ <div class="field"><div class="lab">Position</div><input id="position" type="number" value="225600"></div>
+ <div class="field"><div class="lab">Native reward</div><input id="native" value="ZEC"></div>
+ <div class="field"><div class="lab">Baseline reward / h</div><input id="baseline" type="number" step="0.000001" value="0.00246"></div>
+ <button id="refresh">REFRESH</button>
+ <div class="field wide" style="grid-column:1/-2"><div class="lab">Wallet (optional — enables direct payout tracking)</div><input id="wallet" placeholder="Solana wallet address"></div>
+ <button id="notify">NOTIFY</button>
+</div>
+<div class="regime"><div><div class="k">Regime</div><strong id="regime">—</strong></div><div class="stamp" id="stamp">—</div></div>
+<div class="grid">
+ <div class="card"><div class="k">Market cap</div><div class="v" id="mc">—</div><div class="s" id="mcq">DexScreener primary pair</div></div>
+ <div class="card"><div class="k">Liquidity</div><div class="v" id="liq">—</div><div class="s" id="liqmc">—</div></div>
+ <div class="card"><div class="k">Volume 1h / 24h</div><div class="v" id="vol">—</div><div class="s" id="turnover">—</div></div>
+ <div class="card"><div class="k">ZCAT price</div><div class="v" id="price">—</div><div class="s" id="chg">—</div></div>
+ <div class="card"><div class="k">Transfer tax</div><div class="v" id="tax">—</div><div class="s" id="authority">—</div></div>
+ <div class="card"><div class="k">Max fee behavior</div><div class="v" id="maxfee">—</div><div class="s" id="capbind">—</div></div>
+ <div class="card"><div class="k">Wrapped / native basis</div><div class="v" id="basis">—</div><div class="s" id="rewardpx">—</div></div>
+ <div class="card"><div class="k">Executable position</div><div class="v" id="exec">—</div><div class="s" id="haircut">Jupiter 50 bps quote</div></div>
+</div>
+<div class="two">
+ <div class="box"><h3>Reward engine</h3><div class="rows" id="rewardRows"></div></div>
+ <div class="box"><h3>Wallet payout tape</h3><div class="rows" id="walletRows"></div></div>
+</div>
+<div class="two">
+ <div class="box"><h3>Alerts — only mechanism changes matter</h3><div class="alerts" id="alerts"></div></div>
+ <div class="box"><h3>Source health</h3><div class="srcs" id="sources"></div><details><summary>First-party / QC raw fields</summary><pre id="raw">—</pre></details></div>
+</div>
+<div class="foot">Zero-dependency real-time scanner. Direct browser-to-node telemetry. Data are live API/RPC observations only; unavailable fields remain unresolved. History is cached locally in browser storage.</div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+let timer=null, lastAlertKeys=new Set();
+const money=x=>x==null?'—':(Math.abs(x)>=1e9?'$'+(x/1e9).toFixed(2)+'B':Math.abs(x)>=1e6?'$'+(x/1e6).toFixed(2)+'M':Math.abs(x)>=1e3?'$'+(x/1e3).toFixed(1)+'K':'$'+Number(x).toFixed(2));
+const num=(x,d=2)=>x==null?'—':Number(x).toLocaleString(undefined,{maximumFractionDigits:d});
+const pc=(x,d=2)=>x==null?'—':(x*100).toFixed(d)+'%';
+const pcn=(x,d=2)=>x==null?'—':Number(x).toFixed(d)+'%';
+const n=(v,d=null)=>{try{return(v===null||v==='')?d:(isNaN(Number(v))?d:Number(v))}catch(e){return d}};
+const pct=(a,b)=>{if(a==null||b==null||b===0)return null;return(a/b-1.0)*100.0};
+function row(a,b){return `<div>${a}</div><div>${b}</div>`}
+function src(name,o){let c=!o||!o.ok?'fail':o.stale?'stale':'ok';let t=!o||!o.ok?'FAIL':o.stale?'STALE':'LIVE';return `<span class="src ${c}">${name} ${t}</span>`}
+function notifyNew(alerts){const keys=new Set(alerts.map(a=>a.key));for(const a of alerts){if(!lastAlertKeys.has(a.key)&&Notification.permission==='granted'){new Notification('ZCAT Sentinel: '+a.level,{body:a.text})}}lastAlertKeys=keys}
+
+const RPC_URL = "https://api.mainnet-beta.solana.com";
+const TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+const STONK_OPERATOR = "5CEbueQnq1Ym2uSSx2xXds3jQAqT1BDnkA59RZobSPAG";
+const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
+async function rpc(method, params, timeout=12000) {
+  const ctrl = new AbortController();
+  const tId = setTimeout(() => ctrl.abort(), timeout);
+  try {
+    const res = await fetch(RPC_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+      signal: ctrl.signal
+    });
+    clearTimeout(tId);
+    if (!res.ok) throw new Error(`RPC ${method}: ${res.status}`);
+    const data = await res.json();
+    if (data.error) throw new Error(`RPC ${method}: ${JSON.stringify(data.error)}`);
+    return data.result;
+  } catch(e) {
+    clearTimeout(tId);
+    throw e;
+  }
+}
+
+async function fetchDexPairs(mint) {
+  const res = await fetch(`https://api.dexscreener.com/token-pairs/v1/solana/${mint}`);
+  if (!res.ok) throw new Error(`DexScreener: ${res.status}`);
+  return await res.json();
+}
+
+function choosePair(pairs, token, reward) {
+  if (!pairs || !pairs.length) return null;
+  const exact = pairs.filter(p => {
+    const b = (p.baseToken || {}).address;
+    const q = (p.quoteToken || {}).address;
+    return (b === token && q === reward) || (b === reward && q === token);
+  });
+  const pool = exact.length ? exact : pairs.filter(p => {
+    const b = (p.baseToken || {}).address;
+    const q = (p.quoteToken || {}).address;
+    return b === token || q === token;
+  });
+  if (!pool.length) return null;
+  return pool.reduce((best, p) => (n((p.liquidity||{}).usd, 0) > n((best.liquidity||{}).usd, 0) ? p : best), pool[0]);
+}
+
+function normalizeDexPair(p, token, reward) {
+  if (!p) return null;
+  const base = p.baseToken || {};
+  const quote = p.quoteToken || {};
+  const priceUsd = n(p.priceUsd);
+  const priceNative = n(p.priceNative);
+  const tokenIsBase = base.address === token;
+  const rewardIsBase = base.address === reward;
+  let rewardUsd = null, tokenUsd = null;
+  if (tokenIsBase) {
+    tokenUsd = priceUsd;
+    if (quote.address === reward && priceUsd != null && priceNative) rewardUsd = priceUsd / priceNative;
+  } else if (rewardIsBase) {
+    rewardUsd = priceUsd;
+    if (quote.address === token && priceUsd != null && priceNative) tokenUsd = priceUsd / priceNative;
+  }
+  return {
+    pairAddress: p.pairAddress,
+    dexId: p.dexId,
+    url: p.url,
+    baseSymbol: base.symbol,
+    quoteSymbol: quote.symbol,
+    tokenPriceUsd: tokenUsd,
+    rewardPriceUsdFromPair: rewardUsd,
+    marketCap: tokenIsBase ? (n(p.marketCap) || n(p.fdv)) : null,
+    fdv: tokenIsBase ? n(p.fdv) : null,
+    liquidity: n((p.liquidity || {}).usd),
+    volume5m: n((p.volume || {}).m5),
+    volume1h: n((p.volume || {}).h1),
+    volume6h: n((p.volume || {}).h6),
+    volume24h: n((p.volume || {}).h24),
+    change1h: n((p.priceChange || {}).h1),
+    change6h: n((p.priceChange || {}).h6),
+    change24h: n((p.priceChange || {}).h24),
+    tx1h: (p.txns || {}).h1,
+    tx24h: (p.txns || {}).h24
+  };
+}
+
+async function fetchGecko(mint) {
+  const res = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/tokens/${mint}/pools?page=1`);
+  if (!res.ok) throw new Error(`Gecko: ${res.status}`);
+  return await res.json();
+}
+
+function relAddr(d, side) {
+  const rid = (((d.relationships || {})[side] || {}).data || {}).id;
+  return rid ? rid.split('_').slice(1).join('_') : null;
+}
+
+function chooseGecko(obj, token, reward) {
+  const rows = (obj && obj.data) || [];
+  const exact = rows.filter(d => {
+    const b = relAddr(d, 'base_token'), q = relAddr(d, 'quote_token');
+    return (b === token && q === reward) || (b === reward && q === token);
+  });
+  const candidates = exact.length ? exact : rows.filter(d => {
+    const b = relAddr(d, 'base_token'), q = relAddr(d, 'quote_token');
+    return b === token || q === token;
+  });
+  if (!candidates.length) return null;
+  return candidates.reduce((best, d) => (n(((d.attributes||{}).reserve_in_usd), 0) > n(((best.attributes||{}).reserve_in_usd), 0) ? d : best), candidates[0]);
+}
+
+function normalizeGecko(d, token, reward) {
+  if (!d) return null;
+  const a = d.attributes || {};
+  const baseAddr = relAddr(d, 'base_token');
+  const quoteAddr = relAddr(d, 'quote_token');
+  let tokenPrice = null, rewardPrice = null;
+  if (baseAddr === token) {
+    tokenPrice = n(a.base_token_price_usd);
+    if (quoteAddr === reward) rewardPrice = n(a.quote_token_price_usd);
+  } else if (quoteAddr === token) {
+    tokenPrice = n(a.quote_token_price_usd);
+    if (baseAddr === reward) rewardPrice = n(a.base_token_price_usd);
+  }
+  const vol = a.volume_usd || {};
+  const change = a.price_change_percentage || {};
+  return {
+    pairAddress: (d.id || '').split('_').slice(1).join('_'),
+    name: a.name,
+    tokenPriceUsd: tokenPrice,
+    rewardPriceUsdFromPair: rewardPrice,
+    marketCap: baseAddr === token ? (n(a.market_cap_usd) || n(a.fdv_usd)) : null,
+    fdv: baseAddr === token ? n(a.fdv_usd) : null,
+    liquidity: n(a.reserve_in_usd),
+    volume5m: n(vol.m5),
+    volume1h: n(vol.h1),
+    volume6h: n(vol.h6),
+    volume24h: n(vol.h24),
+    change1h: n(change.h1),
+    change6h: n(change.h6),
+    change24h: n(change.h24)
+  };
+}
+
+async function fetchContract(mint) {
+  const [acc, epoch] = await Promise.all([
+    rpc("getAccountInfo", [mint, { encoding: "jsonParsed", commitment: "confirmed" }]),
+    rpc("getEpochInfo", [{ commitment: "confirmed" }])
+  ]);
+  if (!acc || !acc.value) throw new Error("Mint account not found");
+  const val = acc.value;
+  const data = val.data || {};
+  const parsed = data.parsed || {};
+  const info = parsed.info || {};
+  const extensions = info.extensions || parsed.extensions || [];
+  let tf = null;
+  for (const ext of extensions) {
+    if (String(ext.extension || '').toLowerCase() === 'transferfeeconfig') {
+      tf = ext.state || ext;
+      break;
+    }
+  }
+  const currentEpoch = epoch && epoch.epoch ? parseInt(epoch.epoch, 10) : 0;
+  const decimals = parseInt(info.decimals || 0, 10) || 0;
+  const supplyRaw = n(info.supply);
+  const supply = supplyRaw != null ? supplyRaw / Math.pow(10, decimals) : null;
+  const result = {
+    programOwner: val.owner,
+    isToken2022: val.owner === TOKEN_2022_PROGRAM,
+    decimals,
+    supply,
+    currentEpoch,
+    transferFee: null
+  };
+  if (tf) {
+    const oldFee = tf.olderTransferFee || {};
+    const newFee = tf.newerTransferFee || {};
+    const newerEpoch = parseInt(n(newFee.epoch, 0) || 0, 10);
+    const active = currentEpoch >= newerEpoch ? newFee : oldFee;
+    const bps = parseInt(n(active.transferFeeBasisPoints, 0) || 0, 10);
+    const maxRaw = n(active.maximumFee);
+    const maxTokens = maxRaw != null ? maxRaw / Math.pow(10, decimals) : null;
+    const capBinds = (maxTokens != null && bps > 0) ? (maxTokens / (bps / 10000.0)) : null;
+    result.transferFee = {
+      bps,
+      percent: bps / 100.0,
+      maximumFeeRaw: active.maximumFee,
+      maximumFeeTokens: maxTokens,
+      capBindsAboveTokens: capBinds,
+      configAuthority: tf.transferFeeConfigAuthority,
+      withdrawAuthority: tf.withdrawWithheldAuthority,
+      withheldAmountRaw: tf.withheldAmount,
+      activeSchedule: active === newFee ? "newer" : "older"
+    };
+  }
+  return result;
+}
+
+async function fetchJupiter(mint, position, decimals) {
+  const amount = Math.round(position * Math.pow(10, decimals));
+  const q = new URLSearchParams({
+    inputMint: mint,
+    outputMint: USDC,
+    amount: String(amount),
+    slippageBps: "50",
+    instructionVersion: "V2"
+  });
+  const res = await fetch(`https://lite-api.jup.ag/swap/v1/quote?${q}`);
+  if (!res.ok) throw new Error(`Jupiter: ${res.status}`);
+  const out = await res.json();
+  if (out.error) throw new Error(out.error);
+  const routes = [];
+  for (const r of out.routePlan || []) {
+    const label = (r.swapInfo || {}).label;
+    if (label) routes.push(label);
+  }
+  return {
+    positionTokens: position,
+    outUsd: n(out.outAmount, 0) / 1000000,
+    minimumUsdAt50bps: n(out.otherAmountThreshold, 0) / 1000000,
+    priceImpactPct: (n(out.priceImpactPct, 0) || 0) * 100.0,
+    route: [...new Set(routes)].join(" → "),
+    contextSlot: out.contextSlot
+  };
+}
+
+function findRewardStablePrice(pairs, reward) {
+  const stableSymbols = new Set(["USDC", "USDT", "USD1", "PYUSD"]);
+  const rows = (pairs || []).filter(p => {
+    const b = p.baseToken || {};
+    const q = p.quoteToken || {};
+    return b.address === reward && stableSymbols.has(q.symbol);
+  });
+  if (!rows.length) return null;
+  const p = rows.reduce((best, r) => (n((r.liquidity||{}).usd, 0) > n((best.liquidity||{}).usd, 0) ? r : best), rows[0]);
+  return {
+    priceUsd: n(p.priceUsd),
+    liquidity: n((p.liquidity || {}).usd),
+    volume24h: n((p.volume || {}).h24),
+    dexId: p.dexId,
+    pairAddress: p.pairAddress,
+    url: p.url
+  };
+}
+
+async function fetchNativePrice(symbol) {
+  const s = (symbol || "ZEC").toUpperCase().trim();
+  const cbSym = s === "WBTC" ? "BTC" : s;
+  try {
+    const res = await fetch(`https://api.coinbase.com/v2/prices/${encodeURIComponent(cbSym)}-USD/spot`);
+    if (res.ok) {
+      const data = await res.json();
+      return { priceUsd: n((data.data || {}).amount), source: "Coinbase" };
+    }
+  } catch(e) {}
+  try {
+    const krakenPair = { BTC: "XBTUSD", WBTC: "XBTUSD", ZEC: "ZECUSD", ETH: "ETHUSD", SOL: "SOLUSD" }[s] || `${s}USD`;
+    const res = await fetch(`https://api.kraken.com/0/public/Ticker?pair=${encodeURIComponent(krakenPair)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (!data.error && data.result) {
+        const row = Object.values(data.result)[0];
+        return { priceUsd: n((row.c || [])[0]), source: "Kraken" };
+      }
+    }
+  } catch(e) {}
+  return { priceUsd: null, source: "Unavailable" };
+}
+
+async function fetchWalletRewards(wallet, reward) {
+  if (!wallet) return null;
+  try {
+    const accs = await rpc("getTokenAccountsByOwner", [wallet, { mint: reward }, { encoding: "jsonParsed", commitment: "confirmed" }]);
+    const rows = (accs || {}).value || [];
+    let balance = 0.0;
+    for (const r of rows) {
+      const info = (((r.account || {}).data || {}).parsed || {}).info || {};
+      const amt = ((info.tokenAmount || {}).uiAmountString);
+      balance += n(amt, 0) || 0;
+    }
+    return {
+      wallet,
+      rewardBalance: balance,
+      velocity3h: null,
+      velocity6h: null,
+      medianPayout: null,
+      medianIntervalMinutes: null,
+      velocityConfidence: "Live Token Account"
+    };
+  } catch(e) {
+    return { error: String(e), wallet, rewardBalance: 0 };
+  }
+}
+
+async function buildSnapshotClient(token, reward, nativeSymbol, position, wallet, baseline, poolFeePct) {
+  const [dexP, geckoP, contractP, rewardPairsP, nativeP, walletP] = await Promise.allSettled([
+    fetchDexPairs(token),
+    fetchGecko(token),
+    fetchContract(token),
+    fetchDexPairs(reward),
+    fetchNativePrice(nativeSymbol),
+    fetchWalletRewards(wallet, reward)
+  ]);
+
+  const dexRes = dexP.status === 'fulfilled' ? { ok: true, data: dexP.value } : { ok: false, error: dexP.reason?.message };
+  const geckoRes = geckoP.status === 'fulfilled' ? { ok: true, data: geckoP.value } : { ok: false, error: geckoP.reason?.message };
+  const contractRes = contractP.status === 'fulfilled' ? { ok: true, data: contractP.value } : { ok: false, error: contractP.reason?.message };
+  const rewardPairsRes = rewardPairsP.status === 'fulfilled' ? { ok: true, data: rewardPairsP.value } : { ok: false, error: rewardPairsP.reason?.message };
+  const nativeRes = nativeP.status === 'fulfilled' ? { ok: true, data: nativeP.value } : { ok: false, error: nativeP.reason?.message };
+  const walletRes = walletP.status === 'fulfilled' ? { ok: true, data: walletP.value } : { ok: false, error: walletP.reason?.message };
+
+  const dex = dexRes.ok ? normalizeDexPair(choosePair(dexRes.data, token, reward), token, reward) : null;
+  const gecko = geckoRes.ok ? normalizeGecko(chooseGecko(geckoRes.data, token, reward), token, reward) : null;
+  const contract = contractRes.ok ? contractRes.data : null;
+  const fee = (contract || {}).transferFee || {};
+  const decimals = (contract || {}).decimals || 9;
+
+  let jup = null, jupRes = { ok: false };
+  try {
+    jup = await fetchJupiter(token, position, decimals);
+    jupRes = { ok: true, data: jup };
+  } catch(e) {
+    jupRes = { ok: false, error: e.message };
+  }
+
+  const rewardStable = rewardPairsRes.ok ? findRewardStablePrice(rewardPairsRes.data, reward) : null;
+  const wrapped = (rewardStable || {}).priceUsd || (dex || {}).rewardPriceUsdFromPair || (gecko || {}).rewardPriceUsdFromPair;
+  const native = (nativeRes.data || {}).priceUsd;
+  const basis = pct(wrapped, native);
+
+  const mc = (dex || {}).marketCap;
+  const liq = (dex || {}).liquidity;
+  const v1 = (dex || {}).volume1h;
+  const v24 = (dex || {}).volume24h;
+  const turnover = (mc && v24 != null) ? (v24 / mc) : null;
+  const liq_mc = (mc && liq != null) ? (liq / mc) : null;
+  let one_way = null, round_trip = null;
+  if (fee.bps != null) {
+    const tax = fee.bps / 10000.0;
+    const pool = poolFeePct / 100.0;
+    one_way = 1 - (1 - tax) * (1 - pool);
+    round_trip = 1 - Math.pow((1 - tax) * (1 - pool), 2);
+  }
+
+  const headline_position = (dex && dex.tokenPriceUsd != null) ? position * dex.tokenPriceUsd : null;
+  let execution_haircut = null;
+  if (jup && headline_position && headline_position > 0) {
+    execution_haircut = 1 - jup.outUsd / headline_position;
+  }
+
+  const divergences = {
+    pricePct: pct((dex || {}).tokenPriceUsd, (gecko || {}).tokenPriceUsd),
+    marketCapPct: pct((dex || {}).marketCap, (gecko || {}).marketCap),
+    liquidityPct: pct((dex || {}).liquidity, (gecko || {}).liquidity),
+    volume24hPct: pct((dex || {}).volume24h, (gecko || {}).volume24h)
+  };
+
+  const alerts = [];
+  function addAlert(key, level, text) { alerts.push({ key, level, text }); }
+  if (liq_mc != null && liq_mc < 0.05) addAlert("liqmc", "warn", `Liquidity/MC is ${(liq_mc*100).toFixed(2)}% (<5%).`);
+  if (divergences.pricePct != null && Math.abs(divergences.pricePct) >= 3) addAlert("pricediv", "warn", `DexScreener vs Gecko price divergence is ${Math.abs(divergences.pricePct).toFixed(1)}%.`);
+  if (basis != null && Math.abs(basis) >= 1) addAlert("basis", "critical", `Wrapped/native ${nativeSymbol} basis is ${basis >= 0 ? '+' : ''}${basis.toFixed(2)}% (>|1%|).`);
+  if (fee) {
+    if (fee.bps != null && fee.bps !== 300) addAlert("taxbps", "critical", `Token-2022 transfer fee is ${fee.bps} bps, expected 300 bps.`);
+    if (fee.configAuthority && fee.configAuthority !== "11111111111111111111111111111111") addAlert("authority", "critical", "Transfer-fee config authority is not null.");
+  }
+  if (execution_haircut != null && execution_haircut >= 0.05) {
+    addAlert("execution", execution_haircut >= 0.10 ? "critical" : "warn", `Jupiter executable value is ${(execution_haircut*100).toFixed(1)}% below headline position value.`);
+  }
+
+  let mechanical = null;
+  if (v24 != null && fee.bps && (contract || {}).supply && wrapped) {
+    const tax_pct = fee.bps / 10000.0;
+    const share = position / contract.supply;
+    const usd_day = v24 * tax_pct * share;
+    mechanical = {
+      usdPerDay: usd_day,
+      rewardPerDay: wrapped ? usd_day / wrapped : null,
+      rewardPerHour: wrapped ? usd_day / wrapped / 24 : null,
+      assumption: "primary-pair volume × live Token-2022 tax × position / total supply; not an observed payout forecast"
+    };
+  }
+
+  let regime = "INSUFFICIENT HISTORY";
+  const ch6 = (dex || {}).change6h;
+  const pace = (v1 != null && v24 != null && v24 !== 0) ? (v1 * 24 / v24) : null;
+  if (basis != null && Math.abs(basis) >= 1) {
+    regime = "DISLOCATION";
+  } else if (ch6 != null && ch6 <= -15 && pace != null && pace < 0.6) {
+    regime = "UNWIND";
+  } else if (ch6 != null && ch6 >= 0 && pace != null && pace < 0.55) {
+    regime = "EXHAUSTION";
+  } else if (ch6 != null && ch6 >= 10 && pace != null && pace >= 1) {
+    regime = "EXPANSION";
+  } else if (turnover != null && turnover >= 0.15) {
+    regime = "MONETIZATION";
+  }
+
+  return {
+    timestamp: new Date().toISOString(),
+    token,
+    rewardMint: reward,
+    nativeSymbol: nativeSymbol.toUpperCase(),
+    position,
+    regime,
+    dex,
+    dexSource: dexRes,
+    gecko,
+    geckoSource: geckoRes,
+    contract,
+    contractSource: contractRes,
+    jupiter: jup,
+    jupiterSource: jupRes,
+    wallet: walletRes.ok ? walletRes.data : null,
+    walletSource: walletRes,
+    rewardAsset: {
+      wrappedPriceUsd: wrapped,
+      wrappedStablePool: rewardStable,
+      nativePriceUsd: native,
+      nativeSource: (nativeRes.data || {}).source,
+      basisPct: basis
+    },
+    metrics: {
+      turnoverMc: turnover,
+      liquidityMc: liq_mc,
+      oneWayFeeHurdle: one_way,
+      roundTripFeeHurdle: round_trip,
+      headlinePositionUsd: headline_position,
+      executablePositionUsd: jup ? jup.outUsd : null,
+      executionHaircut: execution_haircut,
+      volumePace: pace,
+      divergence: divergences
+    },
+    mechanicalRewardProxy: mechanical,
+    alerts
+  };
+}
+
+async function scan() {
+  $('liveText').textContent = 'scanning…';
+  const token = $('token').value.trim();
+  const reward = $('reward').value.trim();
+  const native = $('native').value.trim() || 'ZEC';
+  const position = parseFloat($('position').value || '225600');
+  const baseline = parseFloat($('baseline').value || '0.00246');
+  const wallet = $('wallet').value.trim();
+  const poolFee = 1.0;
+
+  try {
+    let d = null;
+    // Attempt local Python backend if available
+    try {
+      const q = new URLSearchParams({ token, reward, native, position: String(position), baseline: String(baseline), wallet });
+      const r = await fetch('/api/snapshot?' + q, { cache: 'no-store' });
+      if (r.ok) d = await r.json();
+    } catch(e) {}
+
+    // If local endpoint is absent (e.g. GitHub Pages), execute pure client-side
+    if (!d) {
+      d = await buildSnapshotClient(token, reward, native, position, wallet, baseline, poolFee);
+    }
+    render(d);
+    $('liveText').textContent = 'live · 15s';
+  } catch(e) {
+    $('liveText').textContent = 'scanner error';
+    console.error(e);
+  }
+  clearTimeout(timer);
+  timer = setTimeout(scan, 15000);
+}
+
+function render(d) {
+  const x = d.dex || {}, m = d.metrics || {}, c = d.contract || {}, f = c.transferFee || {}, ra = d.rewardAsset || {}, j = d.jupiter || {}, w = d.wallet || {}, mech = d.mechanicalRewardProxy || {};
+  $('regime').textContent = d.regime || '—';
+  $('regime').className = (d.regime === 'UNWIND' || d.regime === 'DISLOCATION' || d.regime === 'EXHAUSTION') ? 'bad' : (d.regime === 'EXPANSION' ? 'good' : 'warn');
+  $('stamp').textContent = new Date(d.timestamp).toLocaleString();
+  $('mc').textContent = money(x.marketCap);
+  $('liq').textContent = money(x.liquidity);
+  $('liqmc').textContent = 'Liquidity / MC ' + pc(m.liquidityMc);
+  $('vol').textContent = money(x.volume1h) + ' / ' + money(x.volume24h);
+  $('turnover').textContent = 'Turnover / MC ' + pc(m.turnoverMc) + ' · pace ' + num(m.volumePace, 2) + '×';
+  $('price').textContent = x.tokenPriceUsd == null ? '—' : '$' + Number(x.tokenPriceUsd).toPrecision(5);
+  $('chg').textContent = '1h ' + pcn(x.change1h) + ' · 6h ' + pcn(x.change6h) + ' · 24h ' + pcn(x.change24h);
+  $('tax').textContent = f.bps == null ? '—' : f.bps + ' bps';
+  $('tax').className = f.bps === 300 ? 'v good' : 'v bad';
+  $('authority').textContent = 'config authority ' + (f.configAuthority == null ? 'NULL ✓' : String(f.configAuthority).slice(0, 8) + '…');
+  $('maxfee').textContent = f.maximumFeeTokens == null ? '—' : num(f.maximumFeeTokens, 2) + ' tokens';
+  $('capbind').textContent = f.capBindsAboveTokens == null ? '—' : 'cap binds above ~' + num(f.capBindsAboveTokens, 0) + ' tokens / transfer';
+  $('basis').textContent = ra.basisPct == null ? '—' : (ra.basisPct >= 0 ? '+' : '') + ra.basisPct.toFixed(2) + '%';
+  $('basis').className = 'v ' + (ra.basisPct != null && Math.abs(ra.basisPct) >= 1 ? 'bad' : 'good');
+  $('rewardpx').textContent = 'wrapped ' + money(ra.wrappedPriceUsd) + ' · native ' + money(ra.nativePriceUsd) + ' ' + (ra.nativeSource || '');
+  $('exec').textContent = j.outUsd == null ? '—' : money(j.outUsd);
+  $('haircut').textContent = j.outUsd == null ? 'Jupiter unavailable' : 'headline ' + money(m.headlinePositionUsd) + ' · haircut ' + pc(m.executionHaircut) + ' · impact ' + pcn(j.priceImpactPct, 2);
+  $('rewardRows').innerHTML = row('Primary-pair 3% tax proxy', x.volume24h == null ? '—' : money(x.volume24h * (f.bps || 300) / 10000) + '/day')
+    + row('1% pool-fee notional', x.volume24h == null ? '—' : money(x.volume24h * .01) + '/day')
+    + row('One-way fee hurdle', pc(m.oneWayFeeHurdle))
+    + row('Round-trip fee hurdle', pc(m.roundTripFeeHurdle))
+    + row('Position mechanical proxy', mech.rewardPerHour == null ? '—' : num(mech.rewardPerHour, 6) + ' ' + d.nativeSymbol + '/h');
+
+  if (d.wallet && d.wallet.wallet) {
+    $('walletRows').innerHTML = row('Reward balance', num(w.rewardBalance, 6) + ' ' + d.nativeSymbol)
+      + row('Status', w.velocityConfidence || 'Active')
+      + row('Wallet address', String(w.wallet).slice(0, 6) + '…' + String(w.wallet).slice(-6));
+  } else {
+    $('walletRows').innerHTML = '<div style="grid-column:1/-1;color:var(--muted)">Paste a public wallet above to inspect reward balances. Zero signing or private keys required.</div>';
+  }
+
+  const alerts = d.alerts || [];
+  $('alerts').innerHTML = alerts.length ? alerts.map(a => `<div class="alert ${a.level}">${a.text}</div>`).join('') : '<div class="alert info">No active anomalies detected across contract & market telemetry.</div>';
+  notifyNew(alerts);
+
+  $('sources').innerHTML = src('DEX', d.dexSource) + src('GECKO', d.geckoSource) + src('RPC', d.contractSource) + src('JUP', d.jupiterSource) + (d.walletSource ? src('WALLET', d.walletSource) : '');
+  $('raw').textContent = JSON.stringify({ divergence: m.divergence, contract: f, jupiter: j }, null, 2);
+}
+
+$('refresh').onclick = scan;
+$('notify').onclick = async () => {
+  if ('Notification' in window) {
+    await Notification.requestPermission();
+    $('notify').textContent = Notification.permission.toUpperCase();
+  }
+};
+scan();
+</script>
+</body>
+</html>
