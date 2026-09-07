@@ -10,11 +10,8 @@ OpenAI File Downloader, XaiImageApiFetch/1.0
 from __future__ import annotations
 
 import argparse
-import base64
 import hashlib
 import json
-import math
-import os
 import statistics
 import threading
 import time
@@ -38,6 +35,8 @@ USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 RPC_URL = "https://api.mainnet-beta.solana.com"
 HOST = "127.0.0.1"
 PORT = 8765
+DEFAULT_MEXC_SYMBOL = "ZCATUSDT"
+DEFAULT_LBANK_SYMBOL = "zcat_usdt"
 
 BASE_DIR = Path(__file__).resolve().parent
 HISTORY_FILE = BASE_DIR / "zcat_sentinel_history.jsonl"
@@ -189,6 +188,123 @@ def normalize_dex_pair(p: dict[str, Any] | None, token: str, reward: str) -> dic
         "change24h": n((p.get("priceChange") or {}).get("h24")),
         "tx1h": p.get("txns", {}).get("h1"),
         "tx24h": p.get("txns", {}).get("h24"),
+    }
+
+
+def aggregate_dex_volume(pairs: list[dict[str, Any]], token: str, reward: str) -> dict[str, Any]:
+    """Sum unique Solana DEX pools that actually contain the token.
+
+    This is an observable on-chain swap-volume proxy. Token-2022 transfer tax also
+    applies to non-swap transfers, so this is a lower bound on taxable transfer
+    notional rather than a complete tax ledger.
+    """
+    unique: dict[str, dict[str, Any]] = {}
+    for p in pairs or []:
+        if p.get("chainId") not in (None, "solana"):
+            continue
+        b = (p.get("baseToken") or {}).get("address")
+        q = (p.get("quoteToken") or {}).get("address")
+        if token not in {b, q}:
+            continue
+        key = p.get("pairAddress") or f"{p.get('dexId')}:{b}:{q}"
+        old = unique.get(key)
+        if old is None or (n((p.get("volume") or {}).get("h24"), 0) or 0) > (n((old.get("volume") or {}).get("h24"), 0) or 0):
+            unique[key] = p
+
+    rows = list(unique.values())
+    exact_reward = [p for p in rows if {(p.get("baseToken") or {}).get("address"), (p.get("quoteToken") or {}).get("address")} == {token, reward}]
+
+    def total(window: str, source: list[dict[str, Any]]) -> float:
+        return sum(n((p.get("volume") or {}).get(window), 0) or 0 for p in source)
+
+    top = sorted(rows, key=lambda p: n((p.get("volume") or {}).get("h24"), 0) or 0, reverse=True)[:8]
+    venues = []
+    for p in top:
+        b = p.get("baseToken") or {}
+        q = p.get("quoteToken") or {}
+        venues.append({
+            "dex": p.get("dexId"),
+            "pairAddress": p.get("pairAddress"),
+            "pair": f"{b.get('symbol') or '?'} / {q.get('symbol') or '?'}",
+            "volume24h": n((p.get("volume") or {}).get("h24")),
+            "liquidity": n((p.get("liquidity") or {}).get("usd")),
+            "isRewardPair": p in exact_reward,
+        })
+    return {
+        "poolCount": len(rows),
+        "volume5m": total("m5", rows),
+        "volume1h": total("h1", rows),
+        "volume6h": total("h6", rows),
+        "volume24h": total("h24", rows),
+        "liquidity": sum(n((p.get("liquidity") or {}).get("usd"), 0) or 0 for p in rows),
+        "rewardPairVolume1h": total("h1", exact_reward),
+        "rewardPairVolume24h": total("h24", exact_reward),
+        "rewardPairLiquidity": sum(n((p.get("liquidity") or {}).get("usd"), 0) or 0 for p in exact_reward),
+        "topPools": venues,
+    }
+
+
+def mexc_ticker(symbol: str = DEFAULT_MEXC_SYMBOL) -> dict[str, Any]:
+    obj = request_json(f"https://api.mexc.com/api/v3/ticker/24hr?symbol={urllib.parse.quote(symbol)}", timeout=7)
+    if not isinstance(obj, dict):
+        raise RuntimeError("unexpected MEXC ticker response")
+    quote = n(obj.get("quoteVolume"))
+    last = n(obj.get("lastPrice"))
+    base = n(obj.get("volume"))
+    if quote is None and base is not None and last is not None:
+        quote = base * last
+    return {"venue": "MEXC", "symbol": symbol, "priceUsd": last, "volume24hUsd": quote}
+
+
+def lbank_ticker(symbol: str = DEFAULT_LBANK_SYMBOL) -> dict[str, Any]:
+    obj = request_json(f"https://api.lbkex.com/v2/ticker/24hr.do?symbol={urllib.parse.quote(symbol)}", timeout=7)
+    data = obj.get("data") if isinstance(obj, dict) else None
+    if isinstance(data, list):
+        data = data[0] if data else {}
+    data = data or {}
+    tick = data.get("ticker") if isinstance(data, dict) else {}
+    tick = tick or data
+    last = n(tick.get("latest")) or n(tick.get("last")) or n(tick.get("close"))
+    quote = n(tick.get("turnover")) or n(tick.get("quoteVolume")) or n(tick.get("quote_volume"))
+    base = n(tick.get("vol")) or n(tick.get("volume"))
+    if quote is None and base is not None and last is not None:
+        quote = base * last
+    if quote is None:
+        raise RuntimeError("LBank ticker did not expose quote turnover")
+    return {"venue": "LBank", "symbol": symbol, "priceUsd": last, "volume24hUsd": quote}
+
+
+def coingecko_market(mint: str) -> dict[str, Any]:
+    obj = request_json(f"https://api.coingecko.com/api/v3/coins/solana/contract/{urllib.parse.quote(mint)}", timeout=8)
+    market = (obj or {}).get("market_data") or {}
+    return {
+        "id": (obj or {}).get("id"),
+        "symbol": (obj or {}).get("symbol"),
+        "priceUsd": n((market.get("current_price") or {}).get("usd")),
+        "marketCapUsd": n((market.get("market_cap") or {}).get("usd")),
+        "totalVolume24hUsd": n((market.get("total_volume") or {}).get("usd")),
+    }
+
+
+def venue_split(dex_agg: dict[str, Any], cex_rows: list[dict[str, Any]], headline_volume: float | None) -> dict[str, Any]:
+    dex24 = n(dex_agg.get("volume24h"), 0) or 0
+    known_cex = sum(n(r.get("volume24hUsd"), 0) or 0 for r in cex_rows)
+    observed = dex24 + known_cex
+    total = headline_volume if headline_volume is not None and headline_volume > 0 else observed
+    residual = max(0.0, total - observed) if total else 0.0
+    denominator = max(total, observed)
+    return {
+        "dexTaxableProxy24h": dex24,
+        "knownCex24h": known_cex,
+        "headline24h": headline_volume,
+        "unattributed24h": residual,
+        "observedTotal24h": observed,
+        "dexShare": dex24 / denominator if denominator else None,
+        "knownCexShare": known_cex / denominator if denominator else None,
+        "unattributedShare": residual / denominator if denominator else None,
+        "classifiedShare": min(1.0, observed / total) if total else None,
+        "rewardPairShareOfDex": (n(dex_agg.get("rewardPairVolume24h"), 0) or 0) / dex24 if dex24 else None,
+        "cexVenues": cex_rows,
     }
 
 
@@ -587,7 +703,11 @@ def build_snapshot(token: str, reward: str, native_symbol: str, position: float,
         "native": lambda: cached(f"native:{native_symbol}", 25, lambda: native_price(native_symbol)),
         "stonk": lambda: cached(f"stonk:{token}", 28, lambda: stonkfun_rewards(token)),
         "enrich": lambda: cached(f"enrich:{token}", 120, lambda: solenrich(token)),
+        "coingecko": lambda: cached(f"coingecko:{token}", 55, lambda: coingecko_market(token)),
     }
+    if token == DEFAULT_TOKEN:
+        jobs["mexc"] = lambda: cached("cex:mexc:zcat", 25, lambda: mexc_ticker())
+        jobs["lbank"] = lambda: cached("cex:lbank:zcat", 25, lambda: lbank_ticker())
     if wallet:
         jobs["wallet"] = lambda: cached(f"wallet:{wallet}:{reward}", 45, lambda: wallet_rewards(wallet, reward))
     results: dict[str, dict[str, Any]] = {}
@@ -601,7 +721,9 @@ def build_snapshot(token: str, reward: str, native_symbol: str, position: float,
                 results[name] = {"ok": False, "stale": False, "error": str(e)}
 
     dex_res = results["dex"]
-    dex = normalize_dex_pair(choose_pair(dex_res["data"], token, reward), token, reward) if dex_res.get("ok") else None
+    dex_pairs_raw = dex_res.get("data") if dex_res.get("ok") else []
+    dex = normalize_dex_pair(choose_pair(dex_pairs_raw, token, reward), token, reward) if dex_res.get("ok") else None
+    dex_agg = aggregate_dex_volume(dex_pairs_raw, token, reward) if dex_res.get("ok") else {}
     gecko_res = results["gecko"]
     gecko = normalize_gecko(choose_gecko(gecko_res["data"], token, reward), token, reward) if gecko_res.get("ok") else None
     contract_res = results["contract"]
@@ -627,15 +749,25 @@ def build_snapshot(token: str, reward: str, native_symbol: str, position: float,
     basis = pct(wrapped, native)
     stonk_res = results["stonk"]
     enrich_res = results["enrich"]
+    mexc_res = results.get("mexc", {"ok": False, "stale": False, "error": "not configured for this mint"})
+    lbank_res = results.get("lbank", {"ok": False, "stale": False, "error": "not configured for this mint"})
+    cg_res = results["coingecko"]
+    cex_rows = [r.get("data") for r in (mexc_res, lbank_res) if r.get("ok") and r.get("data")]
+    cg = cg_res.get("data") if cg_res.get("ok") else None
+    split = venue_split(dex_agg, cex_rows, (cg or {}).get("totalVolume24hUsd"))
     wallet_res = results.get("wallet")
     wallet_data = wallet_res.get("data") if wallet_res and wallet_res.get("ok") else None
 
     mc = (dex or {}).get("marketCap")
     liq = (dex or {}).get("liquidity")
-    v1 = (dex or {}).get("volume1h")
-    v24 = (dex or {}).get("volume24h")
-    turnover = (v24 / mc) if mc and v24 is not None else None
+    primary_v1 = (dex or {}).get("volume1h")
+    primary_v24 = (dex or {}).get("volume24h")
+    dex_v1 = n(dex_agg.get("volume1h"))
+    dex_v24 = n(dex_agg.get("volume24h"))
+    reward_pair_v24 = n(dex_agg.get("rewardPairVolume24h"))
+    turnover = (dex_v24 / mc) if mc and dex_v24 is not None else None
     liq_mc = (liq / mc) if mc and liq is not None else None
+    aggregate_liq_mc = ((n(dex_agg.get("liquidity")) or 0) / mc) if mc and dex_agg.get("liquidity") is not None else None
     one_way = None
     round_trip = None
     if fee.get("bps") is not None:
@@ -658,7 +790,9 @@ def build_snapshot(token: str, reward: str, native_symbol: str, position: float,
 
     hist1h = history_near(3600)
     liq_change_1h = pct(liq, hist1h.get("liquidity") if hist1h else None)
-    volume_change_1h = pct(v24, hist1h.get("volume24h") if hist1h else None)
+    volume_change_1h = pct(dex_v24, hist1h.get("dexVolume24h") if hist1h else None)
+    prior_dex_share = hist1h.get("dexShare") if hist1h else None
+    dex_share_change_pp = ((split.get("dexShare") - prior_dex_share) * 100) if split.get("dexShare") is not None and prior_dex_share is not None else None
 
     alerts = []
     def alert(key: str, level: str, text: str) -> None:
@@ -672,6 +806,17 @@ def build_snapshot(token: str, reward: str, native_symbol: str, position: float,
         alert("pricediv", "warn", f"DexScreener vs Gecko price divergence is {abs(divergences['pricePct']):.1f}%.")
     if divergences["marketCapPct"] is not None and abs(divergences["marketCapPct"]) >= 10:
         alert("mcdiv", "warn", f"DexScreener vs Gecko market-cap divergence is {abs(divergences['marketCapPct']):.1f}%.")
+    if split.get("knownCexShare") is not None and split["knownCexShare"] >= 0.25:
+        alert("cexshare", "warn", f"Known CEX volume is {split['knownCexShare']*100:.1f}% of classified/headline turnover; headline volume is no longer a clean reward proxy.")
+    if dex_share_change_pp is not None and dex_share_change_pp <= -12:
+        alert("venuemigration", "critical", f"On-chain DEX share fell {abs(dex_share_change_pp):.1f} percentage points vs ~1h ago.")
+    if volume_change_1h is not None and volume_change_1h <= -40:
+        alert("taxablevolume", "critical", f"Observable on-chain taxable-volume proxy is down {abs(volume_change_1h):.1f}% vs ~1h ago.")
+    dex_pace_now = (dex_v1 * 24 / dex_v24) if dex_v1 is not None and dex_v24 not in (None, 0) else None
+    if dex_pace_now is not None and dex_pace_now < 0.55 and mc and mc >= 20_000_000:
+        alert("turnoverpace", "warn", f"On-chain 1h volume pace is only {dex_pace_now:.2f}× the rolling-24h rate at elevated valuation.")
+    if split.get("unattributedShare") is not None and split["unattributedShare"] >= 0.20:
+        alert("unattributed", "warn", f"{split['unattributedShare']*100:.1f}% of headline 24h volume is unattributed by direct DEX/MEXC/LBank feeds.")
     if basis is not None and abs(basis) >= 1:
         alert("basis", "critical", f"Wrapped/native {native_symbol} basis is {basis:+.2f}% (>|1%|).")
     if fee:
@@ -693,26 +838,30 @@ def build_snapshot(token: str, reward: str, native_symbol: str, position: float,
     if not stonk_res["ok"]:
         alert("stonkapi", "info", "StonkFun reward endpoint not readable; network reward totals remain unresolved.")
 
-    # Mechanical, explicitly model-only, position payout proxy.
+    # Mechanical lower-bound proxy: observable on-chain DEX volume only. CEX internal
+    # turnover is excluded because matching-engine trades do not imply Token-2022 transfers.
     mechanical = None
-    if v24 is not None and fee.get("bps") and (contract or {}).get("supply") and wrapped:
+    if dex_v24 is not None and fee.get("bps") and (contract or {}).get("supply") and wrapped:
         tax_pct = fee["bps"] / 10000.0
         share = position / contract["supply"]
-        usd_day = v24 * tax_pct * share
+        usd_day = dex_v24 * tax_pct * share
         mechanical = {
             "usdPerDay": usd_day,
             "rewardPerDay": usd_day / wrapped if wrapped else None,
             "rewardPerHour": usd_day / wrapped / 24 if wrapped else None,
-            "assumption": "primary-pair volume × live Token-2022 tax × position / total supply; not an observed payout forecast",
+            "taxableDexVolume24h": dex_v24,
+            "assumption": "all observable Solana DEX ZCAT volume × live Token-2022 tax × position / total supply; excludes CEX internal turnover and non-swap transfers",
         }
 
     # Regime: intentionally simple and auditable.
     regime = "INSUFFICIENT HISTORY"
     ch6 = (dex or {}).get("change6h")
-    pace = (v1 * 24 / v24) if v1 is not None and v24 not in (None, 0) else None
+    pace = (dex_v1 * 24 / dex_v24) if dex_v1 is not None and dex_v24 not in (None, 0) else None
     wallet_bad = bool(wallet_data and wallet_data.get("velocity6h") is not None and baseline > 0 and wallet_data["velocity6h"] <= baseline*0.5)
     if basis is not None and abs(basis) >= 1:
         regime = "DISLOCATION"
+    elif dex_share_change_pp is not None and dex_share_change_pp <= -12 and split.get("knownCexShare", 0) >= .20:
+        regime = "EXHAUSTION"
     elif ch6 is not None and ch6 <= -15 and ((liq_change_1h is not None and liq_change_1h < -15) or (pace is not None and pace < .6)):
         regime = "UNWIND"
     elif wallet_bad or (ch6 is not None and ch6 >= 0 and pace is not None and pace < .55):
@@ -743,6 +892,14 @@ def build_snapshot(token: str, reward: str, native_symbol: str, position: float,
         "jupiterSource": {k: jup_res.get(k) for k in ("ok", "stale", "age", "error") if k in jup_res},
         "wallet": wallet_data,
         "walletSource": ({k: wallet_res.get(k) for k in ("ok", "stale", "age", "error") if k in wallet_res} if wallet_res else None),
+        "venues": {
+            "onchainDex": dex_agg,
+            "split": split,
+            "coinGecko": cg,
+        },
+        "mexcSource": {k: mexc_res.get(k) for k in ("ok", "stale", "age", "error") if k in mexc_res},
+        "lbankSource": {k: lbank_res.get(k) for k in ("ok", "stale", "age", "error") if k in lbank_res},
+        "coinGeckoSource": {k: cg_res.get(k) for k in ("ok", "stale", "age", "error") if k in cg_res},
         "rewardAsset": {
             "wrappedPriceUsd": wrapped,
             "wrappedStablePool": reward_stable,
@@ -761,6 +918,13 @@ def build_snapshot(token: str, reward: str, native_symbol: str, position: float,
             "liqChange1hPct": liq_change_1h,
             "volume24Change1hPct": volume_change_1h,
             "volumePace": pace,
+            "dexShareChangePp1h": dex_share_change_pp,
+            "aggregateDexLiquidityMc": aggregate_liq_mc,
+            "primaryVolume1h": primary_v1,
+            "primaryVolume24h": primary_v24,
+            "dexTaxableProxy1h": dex_v1,
+            "dexTaxableProxy24h": dex_v24,
+            "rewardPairVolume24h": reward_pair_v24,
             "divergence": divergences,
         },
         "mechanicalRewardProxy": mechanical,
@@ -773,8 +937,14 @@ def build_snapshot(token: str, reward: str, native_symbol: str, position: float,
             "price": dex.get("tokenPriceUsd"),
             "marketCap": mc,
             "liquidity": liq,
-            "volume1h": v1,
-            "volume24h": v24,
+            "volume1h": primary_v1,
+            "volume24h": primary_v24,
+            "dexVolume1h": dex_v1,
+            "dexVolume24h": dex_v24,
+            "rewardPairVolume24h": reward_pair_v24,
+            "knownCex24h": split.get("knownCex24h"),
+            "headlineVolume24h": split.get("headline24h"),
+            "dexShare": split.get("dexShare"),
             "turnoverMc": turnover,
             "liquidityMc": liq_mc,
             "wrapped": wrapped,
@@ -798,7 +968,7 @@ HTML = r'''<!doctype html>
 .regime{display:flex;justify-content:space-between;align-items:center;background:var(--panel);border:1px solid var(--line);padding:12px 14px;border-radius:12px;margin-bottom:14px}.regime strong{font-size:17px;letter-spacing:.06em}.stamp{font-size:11px;color:var(--muted)}
 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}.card{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:11px;padding:12px;min-height:96px}.k{font-size:9px;text-transform:uppercase;letter-spacing:.13em;color:var(--muted)}.v{font-size:21px;font-weight:750;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.s{font-size:11px;color:var(--muted);margin-top:4px}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}.cyan{color:var(--cyan)}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}.box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:13px}.box h3{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 10px;color:#bac8ce}.rows{display:grid;grid-template-columns:1fr auto;gap:7px 16px}.rows div:nth-child(odd){color:var(--muted)}.rows div:nth-child(even){text-align:right;max-width:420px;overflow:hidden;text-overflow:ellipsis}.alerts{display:flex;flex-direction:column;gap:7px}.alert{padding:9px 11px;border-radius:8px;border-left:3px solid var(--warn);background:#17150e}.alert.critical{border-color:var(--bad);background:#1c0f12}.alert.info{border-color:#59717b;background:#0e1518;color:#a8b6bc}.srcs{display:flex;gap:7px;flex-wrap:wrap}.src{font-size:10px;border:1px solid var(--line);border-radius:99px;padding:4px 7px;color:var(--muted)}.src.ok{color:var(--good);border-color:#214b39}.src.stale{color:var(--warn);border-color:#5a4a22}.src.fail{color:var(--bad);border-color:#5b252b}
-pre{white-space:pre-wrap;word-break:break-word;background:#080c0f;border:1px solid #19252c;border-radius:8px;padding:9px;max-height:210px;overflow:auto;color:#9dafb7;font-size:10px}details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:11px}.foot{font-size:10px;color:#687780;padding:4px 2px 20px}.spark{height:54px;margin-top:8px;width:100%}.spark polyline{fill:none;stroke:var(--cyan);stroke-width:2;vector-effect:non-scaling-stroke}.spark .base{stroke:#1d2a31;stroke-width:1}
+pre{white-space:pre-wrap;word-break:break-word;background:#080c0f;border:1px solid #19252c;border-radius:8px;padding:9px;max-height:210px;overflow:auto;color:#9dafb7;font-size:10px}details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:11px}.foot{font-size:10px;color:#687780;padding:4px 2px 20px}.spark{height:54px;margin-top:8px;width:100%}.spark polyline{fill:none;stroke:var(--cyan);stroke-width:2;vector-effect:non-scaling-stroke}.spark .base{stroke:#1d2a31;stroke-width:1}.splitbar{display:flex;height:10px;border-radius:99px;overflow:hidden;background:#071015;margin:9px 0 8px}.seg.dex{background:#47d18c}.seg.cex{background:#61d7e8}.seg.unknown{background:#5d6870}.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--muted)}
 @media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}.controls{grid-template-columns:1fr 1fr}.controls .wide{grid-column:span 2}.top{flex-direction:column}.v{font-size:18px}}@media(max-width:520px){.wrap{padding:11px}.grid{grid-template-columns:1fr 1fr;gap:7px}.card{padding:10px;min-height:88px}.controls{grid-template-columns:1fr}.controls .wide{grid-column:auto}.title{font-size:18px}}
 </style>
 </head>
@@ -818,7 +988,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:#080c0f;border:1px sol
 <div class="grid">
  <div class="card"><div class="k">Market cap</div><div class="v" id="mc">—</div><div class="s" id="mcq">DexScreener primary pair</div></div>
  <div class="card"><div class="k">Liquidity</div><div class="v" id="liq">—</div><div class="s" id="liqmc">—</div></div>
- <div class="card"><div class="k">Volume 1h / 24h</div><div class="v" id="vol">—</div><div class="s" id="turnover">—</div></div>
+ <div class="card"><div class="k">On-chain taxable proxy 1h / 24h</div><div class="v" id="vol">—</div><div class="s" id="turnover">—</div></div>
  <div class="card"><div class="k">ZCAT price</div><div class="v" id="price">—</div><div class="s" id="chg">—</div></div>
  <div class="card"><div class="k">Transfer tax</div><div class="v" id="tax">—</div><div class="s" id="authority">—</div></div>
  <div class="card"><div class="k">Max fee behavior</div><div class="v" id="maxfee">—</div><div class="s" id="capbind">—</div></div>
@@ -826,8 +996,12 @@ pre{white-space:pre-wrap;word-break:break-word;background:#080c0f;border:1px sol
  <div class="card"><div class="k">Executable position</div><div class="v" id="exec">—</div><div class="s" id="haircut">Jupiter 50 bps quote</div></div>
 </div>
 <div class="two">
+ <div class="box"><h3>Venue split — reward-bearing vs internal</h3><div class="rows" id="venueRows"></div><div class="splitbar"><div id="dexSeg" class="seg dex"></div><div id="cexSeg" class="seg cex"></div><div id="unknownSeg" class="seg unknown"></div></div><div class="legend"><span>DEX taxable proxy</span><span>CEX internal</span><span>unattributed</span></div></div>
  <div class="box"><h3>Reward engine</h3><div class="rows" id="rewardRows"></div></div>
+</div>
+<div class="two">
  <div class="box"><h3>Wallet payout tape</h3><div class="rows" id="walletRows"></div></div>
+ <div class="box"><h3>Top on-chain pools</h3><div class="rows" id="poolRows"></div></div>
 </div>
 <div class="two">
  <div class="box"><h3>Alerts — only mechanism changes matter</h3><div class="alerts" id="alerts"></div></div>
@@ -848,20 +1022,24 @@ async function scan(){
  try{const r=await fetch('/api/snapshot?'+q);const d=await r.json();render(d);$('liveText').textContent='live · 15s';}catch(e){$('liveText').textContent='scanner error';console.error(e)}
  clearTimeout(timer);timer=setTimeout(scan,15000)
 }
-function render(d){const x=d.dex||{},m=d.metrics||{},c=d.contract||{},f=c.transferFee||{},ra=d.rewardAsset||{},j=d.jupiter||{},w=d.wallet||{},mech=d.mechanicalRewardProxy||{};
+function render(d){const x=d.dex||{},m=d.metrics||{},c=d.contract||{},f=c.transferFee||{},ra=d.rewardAsset||{},j=d.jupiter||{},w=d.wallet||{},mech=d.mechanicalRewardProxy||{},venues=d.venues||{},vs=venues.split||{},od=venues.onchainDex||{};
  $('regime').textContent=d.regime||'—';$('regime').className=(d.regime==='UNWIND'||d.regime==='DISLOCATION'||d.regime==='EXHAUSTION')?'bad':(d.regime==='EXPANSION'?'good':'warn');$('stamp').textContent=new Date(d.timestamp).toLocaleString();
  $('mc').textContent=money(x.marketCap);$('liq').textContent=money(x.liquidity);$('liqmc').textContent='Liquidity / MC '+pc(m.liquidityMc)+' · 1h Δ '+pcn(m.liqChange1hPct);
- $('vol').textContent=money(x.volume1h)+' / '+money(x.volume24h);$('turnover').textContent='Turnover / MC '+pc(m.turnoverMc)+' · pace '+num(m.volumePace,2)+'×';
+ $('vol').textContent=money(m.dexTaxableProxy1h)+' / '+money(m.dexTaxableProxy24h);$('turnover').textContent='Reward-bearing turnover / MC '+pc(m.turnoverMc)+' · pace '+num(m.volumePace,2)+'×';
  $('price').textContent=x.tokenPriceUsd==null?'—':'$'+Number(x.tokenPriceUsd).toPrecision(5);$('chg').textContent='1h '+pcn(x.change1h)+' · 6h '+pcn(x.change6h)+' · 24h '+pcn(x.change24h);
  $('tax').textContent=f.bps==null?'—':f.bps+' bps';$('tax').className=f.bps===300?'v good':'v bad';$('authority').textContent='config authority '+(f.configAuthority==null?'NULL ✓':String(f.configAuthority).slice(0,8)+'…');
  $('maxfee').textContent=f.maximumFeeTokens==null?'—':num(f.maximumFeeTokens,2)+' tokens';$('capbind').textContent=f.capBindsAboveTokens==null?'—':'cap binds above ~'+num(f.capBindsAboveTokens,0)+' tokens / transfer';
  $('basis').textContent=ra.basisPct==null?'—':(ra.basisPct>=0?'+':'')+ra.basisPct.toFixed(2)+'%';$('basis').className='v '+(ra.basisPct!=null&&Math.abs(ra.basisPct)>=1?'bad':'good');$('rewardpx').textContent='wrapped '+money(ra.wrappedPriceUsd)+' · native '+money(ra.nativePriceUsd)+' '+(ra.nativeSource||'');
  $('exec').textContent=j.outUsd==null?'—':money(j.outUsd);$('haircut').textContent=j.outUsd==null?'Jupiter unavailable':'headline '+money(m.headlinePositionUsd)+' · haircut '+pc(m.executionHaircut)+' · impact '+pcn(j.priceImpactPct,2);
- $('rewardRows').innerHTML=row('Primary-pair 3% tax proxy',x.volume24h==null?'—':money(x.volume24h*(f.bps||300)/10000)+'/day')+row('1% pool-fee notional',x.volume24h==null?'—':money(x.volume24h*.01)+'/day')+row('One-way fee hurdle',pc(m.oneWayFeeHurdle))+row('Round-trip fee hurdle',pc(m.roundTripFeeHurdle))+row('Position mechanical proxy',mech.rewardPerHour==null?'—':num(mech.rewardPerHour,6)+' '+d.nativeSymbol+'/h')+row('StonkFun first-party',d.stonkfunSource?.ok?'LIVE':'UNRESOLVED');
+ const dexShare=vs.dexShare==null?0:vs.dexShare,cexShare=vs.knownCexShare==null?0:vs.knownCexShare,unknownShare=vs.unattributedShare==null?0:vs.unattributedShare;
+ $('dexSeg').style.width=(dexShare*100)+'%';$('cexSeg').style.width=(cexShare*100)+'%';$('unknownSeg').style.width=(unknownShare*100)+'%';
+ $('venueRows').innerHTML=row('DEX taxable proxy 24h',money(vs.dexTaxableProxy24h))+row('Known CEX internal 24h',money(vs.knownCex24h))+row('Unattributed residual',money(vs.unattributed24h))+row('DEX share',pc(vs.dexShare))+row('CEX share',pc(vs.knownCexShare))+row('Reward pair / DEX',pc(vs.rewardPairShareOfDex))+row('DEX share Δ ~1h',m.dexShareChangePp1h==null?'—':num(m.dexShareChangePp1h,1)+' pp')+row('Directly classified',pc(vs.classifiedShare));
+ $('rewardRows').innerHTML=row('Observable DEX 3% tax proxy',m.dexTaxableProxy24h==null?'—':money(m.dexTaxableProxy24h*(f.bps||300)/10000)+'/day')+row('Reward-pair 3% tax proxy',m.rewardPairVolume24h==null?'—':money(m.rewardPairVolume24h*(f.bps||300)/10000)+'/day')+row('Primary 1% pool-fee notional',m.primaryVolume24h==null?'—':money(m.primaryVolume24h*.01)+'/day')+row('One-way fee hurdle',pc(m.oneWayFeeHurdle))+row('Round-trip fee hurdle',pc(m.roundTripFeeHurdle))+row('Position mechanical proxy',mech.rewardPerHour==null?'—':num(mech.rewardPerHour,6)+' '+d.nativeSymbol+'/h')+row('StonkFun first-party',d.stonkfunSource?.ok?'LIVE':'UNRESOLVED');
+ $('poolRows').innerHTML=(od.topPools||[]).slice(0,6).map(p=>row((p.isRewardPair?'★ ':'')+(p.dex||'?')+' '+(p.pair||''),money(p.volume24h)+' / '+money(p.liquidity))).join('')||'<div style="grid-column:1/-1;color:var(--muted)">No pool data.</div>';
  if(d.wallet){$('walletRows').innerHTML=row('Reward balance',num(w.rewardBalance,8)+' '+d.nativeSymbol)+row('3h attributed velocity',w.velocity3h==null?'—':num(w.velocity3h,7)+' /h')+row('6h attributed velocity',w.velocity6h==null?'—':num(w.velocity6h,7)+' /h')+row('Median payout',w.medianPayout==null?'—':num(w.medianPayout,8))+row('Median interval',w.medianIntervalMinutes==null?'—':num(w.medianIntervalMinutes,0)+' min')+row('Attribution',w.velocityConfidence||'—');}else{$('walletRows').innerHTML='<div style="grid-column:1/-1;color:var(--muted)">Paste a public wallet above to enable direct on-chain payout tracking. No signing or wallet connection.</div>'}
  const alerts=d.alerts||[];$('alerts').innerHTML=alerts.length?alerts.map(a=>`<div class="alert ${a.level}">${a.text}</div>`).join(''):'<div class="alert info">No active meaningful-change trigger beyond configured structural warnings.</div>';notifyNew(alerts);
- $('sources').innerHTML=src('DEX',d.dexSource)+src('GECKO',d.geckoSource)+src('RPC',d.contractSource)+src('JUP',d.jupiterSource)+src('STONKFUN',d.stonkfunSource)+(d.walletSource?src('WALLET',d.walletSource):'');
- $('raw').textContent=JSON.stringify({stonkfun:d.stonkfun,solenrich:d.solenrich,divergence:m.divergence,contract:f},null,2);
+ $('sources').innerHTML=src('DEX',d.dexSource)+src('GECKO',d.geckoSource)+src('RPC',d.contractSource)+src('JUP',d.jupiterSource)+src('STONKFUN',d.stonkfunSource)+src('MEXC',d.mexcSource)+src('LBANK',d.lbankSource)+src('COINGECKO',d.coinGeckoSource)+(d.walletSource?src('WALLET',d.walletSource):'');
+ $('raw').textContent=JSON.stringify({stonkfun:d.stonkfun,venues:d.venues,solenrich:d.solenrich,divergence:m.divergence,contract:f},null,2);
 }
 $('refresh').onclick=scan;$('notify').onclick=async()=>{if('Notification'in window){await Notification.requestPermission();$('notify').textContent=Notification.permission.toUpperCase()}};scan();
 </script></body></html>'''
