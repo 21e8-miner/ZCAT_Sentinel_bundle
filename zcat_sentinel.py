@@ -1060,7 +1060,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/":
-            self._send(200, HTML.encode("utf-8"), "text/html; charset=utf-8")
+            html_file = Path(__file__).resolve().parent / "index.html"
+            html_content = HTML
+            if html_file.is_file():
+                try:
+                    html_content = html_file.read_text(encoding="utf-8")
+                except Exception:
+                    pass
+            self._send(200, html_content.encode("utf-8"), "text/html; charset=utf-8")
             return
         if parsed.path == "/api/snapshot":
             q = urllib.parse.parse_qs(parsed.query)

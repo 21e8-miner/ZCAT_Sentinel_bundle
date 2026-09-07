@@ -1,104 +1,798 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>ZCAT Sentinel — Real-Time Mechanism Scanner</title>
-<meta name="description" content="Zero-dependency real-time scanner for Solana Token-2022 mechanism telemetry, Jupiter execution quotes, and reward tracking." />
-<style>
-:root{--bg:#080b0d;--panel:#0e1317;--panel2:#12191e;--line:#21303a;--txt:#eaf2f5;--muted:#82919a;--good:#47d18c;--warn:#f1b84b;--bad:#ff626e;--cyan:#61d7e8}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% -20%,#16242c 0,#080b0d 42%);color:var(--txt);font:14px/1.42 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;min-height:100vh}
-.wrap{max-width:1220px;margin:0 auto;padding:20px}.top{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:16px}.title{font-size:22px;letter-spacing:.08em;font-weight:800}.sub{color:var(--muted);font-size:12px;margin-top:5px}.live{display:flex;align-items:center;gap:8px;color:var(--good);font-size:12px}.dot{width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 14px currentColor}
-.links{display:flex;gap:10px;align-items:center;margin-top:8px}
-.btn-link{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:6px;text-decoration:none;border:1px solid #31515e;background:#102029;color:#dff8ff;transition:background .15s}
-.btn-link:hover{background:#17313c;color:#fff}
-.btn-link.primary{border-color:#2a705e;background:#0d2b22;color:#61e8b5}
-.btn-link.primary:hover{background:#133c30}
-.controls{display:grid;grid-template-columns:2fr 2fr 1fr 1fr 1fr auto;gap:8px;background:var(--panel);border:1px solid var(--line);padding:10px;border-radius:12px;margin-bottom:14px}
-input,button{font:inherit}input{width:100%;background:#090d10;border:1px solid var(--line);color:var(--txt);padding:8px 9px;border-radius:7px;outline:none}input:focus{border-color:#385b69}
-.lab{font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:0 0 4px 2px}.field{min-width:0}
-button{border:1px solid #31515e;background:#102029;color:#dff8ff;padding:8px 13px;border-radius:7px;cursor:pointer;align-self:end}button:hover{background:#17313c}
-.regime{display:flex;justify-content:space-between;align-items:center;background:var(--panel);border:1px solid var(--line);padding:12px 14px;border-radius:12px;margin-bottom:14px}.regime strong{font-size:17px;letter-spacing:.06em}.stamp{font-size:11px;color:var(--muted)}
-.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}.card{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:11px;padding:12px;min-height:96px}.k{font-size:9px;text-transform:uppercase;letter-spacing:.13em;color:var(--muted)}.v{font-size:21px;font-weight:750;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.s{font-size:11px;color:var(--muted);margin-top:4px}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}.cyan{color:var(--cyan)}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}.box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:13px}.box h3{font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin:0 0 10px;color:#bac8ce}.rows{display:grid;grid-template-columns:1fr auto;gap:7px 16px}.rows div:nth-child(odd){color:var(--muted)}.rows div:nth-child(even){text-align:right;max-width:420px;overflow:hidden;text-overflow:ellipsis}.alerts{display:flex;flex-direction:column;gap:7px}.alert{padding:9px 11px;border-radius:8px;border-left:3px solid var(--warn);background:#17150e}.alert.critical{border-color:var(--bad);background:#1c0f12}.alert.info{border-color:#59717b;background:#0e1518;color:#a8b6bc}.srcs{display:flex;gap:7px;flex-wrap:wrap}.src{font-size:10px;border:1px solid var(--line);border-radius:99px;padding:4px 7px;color:var(--muted)}.src.ok{color:var(--good);border-color:#214b39}.src.stale{color:var(--warn);border-color:#5a4a22}.src.fail{color:var(--bad);border-color:#5b252b}
-pre{white-space:pre-wrap;word-break:break-word;background:#080c0f;border:1px solid #19252c;border-radius:8px;padding:9px;max-height:210px;overflow:auto;color:#9dafb7;font-size:10px}details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:11px}.foot{font-size:10px;color:#687780;padding:4px 2px 20px}.spark{height:54px;margin-top:8px;width:100%}.spark polyline{fill:none;stroke:var(--cyan);stroke-width:2;vector-effect:non-scaling-stroke}.spark .base{stroke:#1d2a31;stroke-width:1}.splitbar{display:flex;height:10px;border-radius:99px;overflow:hidden;background:#071015;margin:9px 0 8px}.seg.dex{background:#47d18c}.seg.cex{background:#61d7e8}.seg.unknown{background:#5d6870}.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--muted)}
-@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}.controls{grid-template-columns:1fr 1fr}.controls .wide{grid-column:span 2}.top{flex-direction:column}.v{font-size:18px}}
-@media(max-width:520px){.wrap{padding:11px}.grid{grid-template-columns:1fr 1fr;gap:7px}.card{padding:10px;min-height:88px}.controls{grid-template-columns:1fr}.controls .wide{grid-column:auto}.title{font-size:18px}}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>ZCAT Sentinel — Rare UI Real-Time Mechanism Scanner</title>
+  <meta name="description" content="Zero-dependency real-time scanner for Solana Token-2022 mechanism telemetry, Jupiter execution quotes, and reward tracking.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #030304;
+      --panel: #0b0b0e;
+      --panel-elevated: #111116;
+      --card: rgba(255, 255, 255, 0.025);
+      --card-hover: rgba(255, 255, 255, 0.045);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-light: rgba(255, 255, 255, 0.14);
+      --txt: #f4f4f5;
+      --muted: #a1a1aa;
+      --muted-dark: #71717a;
+      --accent: #fc4c01;
+      --accent-glow: rgba(252, 76, 1, 0.25);
+      --accent-hover: #ff601c;
+      --good: #10b981;
+      --good-bg: rgba(16, 185, 129, 0.1);
+      --good-border: rgba(16, 185, 129, 0.25);
+      --warn: #f59e0b;
+      --warn-bg: rgba(245, 158, 11, 0.1);
+      --warn-border: rgba(245, 158, 11, 0.25);
+      --bad: #ef4444;
+      --bad-bg: rgba(239, 68, 68, 0.1);
+      --bad-border: rgba(239, 68, 68, 0.25);
+      --cyan: #06b6d4;
+      --cyan-bg: rgba(6, 182, 212, 0.1);
+      --cyan-border: rgba(6, 182, 212, 0.25);
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      background-image: 
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(252, 76, 1, 0.07), transparent 70%),
+        radial-gradient(ellipse 60% 40% at 85% 15%, rgba(6, 182, 212, 0.03), transparent 60%);
+      color: var(--txt);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      min-height: 100vh;
+    }
+    .wrap {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px 20px 48px;
+    }
+
+    /* Rare UI Navigation Bar */
+    .top {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 22px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #fc4c01, #ff7a3d);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 18px var(--accent-glow);
+      color: white;
+      font-weight: 800;
+      font-size: 19px;
+      flex-shrink: 0;
+    }
+    .brand-title {
+      font-size: 21px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin: 0;
+      color: #ffffff;
+    }
+    .brand-badge {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 9999px;
+      background: rgba(252, 76, 1, 0.12);
+      border: 1px solid rgba(252, 76, 1, 0.28);
+      color: #ff601c;
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 12px;
+      font-family: var(--font-mono);
+      letter-spacing: 0.02em;
+      margin-top: 4px;
+    }
+    .top-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .pill-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      backdrop-filter: blur(12px);
+    }
+    .pulse-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--good);
+      box-shadow: 0 0 10px var(--good);
+      animation: rare-pulse 2s infinite;
+    }
+    @keyframes rare-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    /* Rare UI Action Buttons */
+    .pill-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 16px;
+      border-radius: 9999px;
+      text-decoration: none;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--txt);
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      backdrop-filter: blur(8px);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+    .pill-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: var(--border-light);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+    .pill-btn.primary {
+      background: linear-gradient(135deg, #fc4c01, #e04300);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #ffffff;
+      box-shadow: 0 2px 14px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    }
+    .pill-btn.primary:hover {
+      background: linear-gradient(135deg, #ff5c17, #fc4c01);
+      box-shadow: 0 4px 20px rgba(252, 76, 1, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    }
+
+    /* Controls Panel */
+    .controls-panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px 20px;
+      margin-bottom: 18px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+    .controls-grid {
+      display: grid;
+      grid-template-columns: 2fr 2fr 1.1fr 1fr 1.1fr auto;
+      gap: 12px;
+      align-items: flex-end;
+    }
+    .controls-row2 {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      margin-top: 12px;
+      align-items: flex-end;
+    }
+    .field {
+      min-width: 0;
+    }
+    .lab {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    input {
+      width: 100%;
+      background: #060608;
+      border: 1px solid var(--border);
+      color: var(--txt);
+      padding: 8px 12px;
+      border-radius: 10px;
+      outline: none;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      transition: all 0.15s ease;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent), 0 0 14px var(--accent-glow);
+    }
+
+    /* Regime Hero Banner */
+    .regime-banner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(180deg, var(--panel-elevated), var(--panel));
+      border: 1px solid var(--border);
+      padding: 14px 20px;
+      border-radius: 14px;
+      margin-bottom: 18px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+    .regime-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .regime-title-wrap .k {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+    }
+    .regime-pill {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      padding: 4px 14px;
+      border-radius: 9999px;
+      display: inline-block;
+      margin-top: 2px;
+    }
+    .stamp {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--muted);
+    }
+
+    /* Stat Cards Grid */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 15px 16px;
+      min-height: 102px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      transition: all 0.2s ease;
+      backdrop-filter: blur(12px);
+    }
+    .card:hover {
+      background: var(--card-hover);
+      border-color: var(--border-light);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+    .k {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    .v {
+      font-family: var(--font-mono);
+      font-size: 21px;
+      font-weight: 700;
+      margin: 6px 0 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+    }
+    .s {
+      font-size: 11px;
+      color: var(--muted-dark);
+      font-family: var(--font-mono);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Color Tokens */
+    .good { color: var(--good) !important; }
+    .warn { color: var(--warn) !important; }
+    .bad { color: var(--bad) !important; }
+    .cyan { color: var(--cyan) !important; }
+    .accent { color: var(--accent) !important; }
+
+    .regime-pill.good { background: var(--good-bg); border: 1px solid var(--good-border); color: var(--good); }
+    .regime-pill.warn { background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn); }
+    .regime-pill.bad { background: var(--bad-bg); border: 1px solid var(--bad-border); color: var(--bad); }
+
+    /* 2-Column Split Layout */
+    .two {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    .box {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      backdrop-filter: blur(12px);
+    }
+    .box-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .box h3 {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin: 0;
+      color: #e4e4e7;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .box h3::before {
+      content: "";
+      width: 4px;
+      height: 12px;
+      background: var(--accent);
+      border-radius: 2px;
+      display: inline-block;
+    }
+
+    /* Tabular Rows */
+    .rows {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 8px 16px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+    .rows > div:nth-child(odd) {
+      color: var(--muted);
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    }
+    .rows > div:nth-child(even) {
+      text-align: right;
+      color: #f4f4f5;
+      font-weight: 600;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      max-width: 420px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Venue Split Bar */
+    .splitbar {
+      display: flex;
+      height: 8px;
+      border-radius: 9999px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.04);
+      margin: 14px 0 10px;
+    }
+    .seg {
+      transition: width 0.3s ease;
+    }
+    .seg.dex { background: var(--good); box-shadow: 0 0 8px rgba(16, 185, 129, 0.4); }
+    .seg.cex { background: var(--cyan); box-shadow: 0 0 8px rgba(6, 182, 212, 0.4); }
+    .seg.unknown { background: #52525b; }
+    .legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .legend-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    /* Alerts */
+    .alerts {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .alert {
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-left: 3px solid var(--warn);
+      background: var(--warn-bg);
+      color: #fef3c7;
+    }
+    .alert.critical {
+      border-left-color: var(--bad);
+      background: var(--bad-bg);
+      color: #fee2e2;
+    }
+    .alert.info {
+      border-left-color: #52525b;
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--muted);
+    }
+
+    /* Source Health Badges */
+    .srcs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .src {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      padding: 4px 10px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.02);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .src::before {
+      content: "";
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .src.ok { color: var(--good); border-color: var(--good-border); background: var(--good-bg); }
+    .src.stale { color: var(--warn); border-color: var(--warn-border); background: var(--warn-bg); }
+    .src.fail { color: var(--bad); border-color: var(--bad-border); background: var(--bad-bg); }
+
+    /* Raw Code & Details */
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #060608;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      max-height: 220px;
+      overflow: auto;
+      color: #a1a1aa;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+    details {
+      margin-top: 10px;
+    }
+    summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 11px;
+      font-family: var(--font-mono);
+      outline: none;
+      transition: color 0.15s;
+    }
+    summary:hover {
+      color: #fff;
+    }
+
+    /* Footer */
+    .foot {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--muted-dark);
+      padding: 16px 2px 24px;
+      line-height: 1.6;
+      border-top: 1px solid var(--border);
+      margin-top: 24px;
+    }
+
+    @media (max-width: 1024px) {
+      .grid { grid-template-columns: repeat(2, 1fr); }
+      .two { grid-template-columns: 1fr; }
+      .controls-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 640px) {
+      .wrap { padding: 14px 12px; }
+      .grid { grid-template-columns: 1fr; }
+      .controls-grid { grid-template-columns: 1fr; }
+      .controls-row2 { grid-template-columns: 1fr; }
+      .top { flex-direction: column; align-items: flex-start; }
+      .top-actions { width: 100%; }
+    }
+  </style>
 </head>
-<body><div class="wrap">
-<div class="top">
-  <div>
-    <div class="title">ZCAT SENTINEL <span class="cyan">/ LIVE</span></div>
-    <div class="sub">DEX → TOKEN-2022 → REWARD ASSET → WALLET → EXECUTABLE EXIT</div>
-    <div class="links">
-      <a class="btn-link primary" href="https://github.com/21e8-miner/ZCAT_Sentinel_bundle/releases/latest/download/ZCAT_Sentinel_bundle.zip" download>
-        ⬇ Download Bundle (.zip)
+<body>
+<div class="wrap">
+  <!-- Top Navigation Header -->
+  <header class="top">
+    <div class="brand-group">
+      <div class="brand-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="2"/>
+          <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="brand-title">
+          ZCAT SENTINEL
+          <span class="brand-badge">TELEMETRY SCANNER</span>
+        </h1>
+        <div class="sub">DEX → TOKEN-2022 → REWARD ASSET → WALLET → EXECUTABLE EXIT</div>
+      </div>
+    </div>
+    <div class="top-actions">
+      <div class="pill-status">
+        <span class="pulse-dot"></span>
+        <span id="liveText">initializing…</span>
+      </div>
+      <a class="pill-btn primary" href="https://github.com/21e8-miner/ZCAT_Sentinel_bundle/releases/latest/download/ZCAT_Sentinel_bundle.zip" download>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download Bundle (.zip)
       </a>
-      <a class="btn-link" href="https://github.com/21e8-miner/ZCAT_Sentinel_bundle" target="_blank" rel="noopener">
-        GitHub Repo
+      <a class="pill-btn" href="https://github.com/21e8-miner/ZCAT_Sentinel_bundle" target="_blank" rel="noopener">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+        GitHub
       </a>
-      <a class="btn-link" href="https://github.com/21e8-miner/ZCAT_Sentinel_bundle/releases/tag/v1.0.0" target="_blank" rel="noopener">
+      <a class="pill-btn" href="https://github.com/21e8-miner/ZCAT_Sentinel_bundle/releases/tag/v1.0.0" target="_blank" rel="noopener">
         Release v1.0.0
       </a>
     </div>
+  </header>
+
+  <!-- Controls Panel -->
+  <div class="controls-panel">
+    <div class="controls-grid">
+      <div class="field">
+        <div class="lab">Token Mint (Token-2022)</div>
+        <input id="token" value="HcRLc9VDgjLeK154xDawfb1dmVJ98DoSqcwTHGqiDeJR" spellcheck="false">
+      </div>
+      <div class="field">
+        <div class="lab">Reward Mint</div>
+        <input id="reward" value="A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS" spellcheck="false">
+      </div>
+      <div class="field">
+        <div class="lab">Position Tokens</div>
+        <input id="position" type="number" value="225600">
+      </div>
+      <div class="field">
+        <div class="lab">Native Reward</div>
+        <input id="native" value="ZEC">
+      </div>
+      <div class="field">
+        <div class="lab">Baseline / h</div>
+        <input id="baseline" type="number" step="0.000001" value="0.00246">
+      </div>
+      <button class="pill-btn primary" id="refresh" style="height:38px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        REFRESH
+      </button>
+    </div>
+    <div class="controls-row2">
+      <div class="field">
+        <div class="lab">Wallet (Optional — Enables Direct On-Chain Payout Tracking)</div>
+        <input id="wallet" placeholder="Paste Solana wallet address (e.g. 5CEbue...)" spellcheck="false">
+      </div>
+      <button class="pill-btn" id="notify" style="height:38px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        NOTIFY
+      </button>
+    </div>
   </div>
-  <div class="live"><span class="dot"></span><span id="liveText">starting…</span></div>
+
+  <!-- Regime Hero Banner -->
+  <div class="regime-banner">
+    <div class="regime-info">
+      <div class="regime-title-wrap">
+        <div class="k">Mechanism Regime</div>
+        <span class="regime-pill" id="regime">—</span>
+      </div>
+    </div>
+    <div class="stamp" id="stamp">—</div>
+  </div>
+
+  <!-- Key Metrics Stat Cards -->
+  <div class="grid">
+    <div class="card">
+      <div class="k">Market Cap</div>
+      <div class="v" id="mc">—</div>
+      <div class="s" id="mcq">DexScreener primary pair</div>
+    </div>
+    <div class="card">
+      <div class="k">Liquidity</div>
+      <div class="v" id="liq">—</div>
+      <div class="s" id="liqmc">—</div>
+    </div>
+    <div class="card">
+      <div class="k">On-Chain Taxable Proxy 1h / 24h</div>
+      <div class="v" id="vol">—</div>
+      <div class="s" id="turnover">—</div>
+    </div>
+    <div class="card">
+      <div class="k">ZCAT Price</div>
+      <div class="v" id="price">—</div>
+      <div class="s" id="chg">—</div>
+    </div>
+    <div class="card">
+      <div class="k">Transfer Tax (Token-2022)</div>
+      <div class="v" id="tax">—</div>
+      <div class="s" id="authority">—</div>
+    </div>
+    <div class="card">
+      <div class="k">Max Fee Behavior</div>
+      <div class="v" id="maxfee">—</div>
+      <div class="s" id="capbind">—</div>
+    </div>
+    <div class="card">
+      <div class="k">Wrapped / Native Basis</div>
+      <div class="v" id="basis">—</div>
+      <div class="s" id="rewardpx">—</div>
+    </div>
+    <div class="card">
+      <div class="k">Executable Position</div>
+      <div class="v" id="exec">—</div>
+      <div class="s" id="haircut">Jupiter 50 bps quote</div>
+    </div>
+  </div>
+
+  <!-- 2-Column Split: Venues & Rewards -->
+  <div class="two">
+    <div class="box">
+      <div class="box-header">
+        <h3>Venue Split — Reward-Bearing vs Internal</h3>
+      </div>
+      <div class="rows" id="venueRows"></div>
+      <div class="splitbar">
+        <div id="dexSeg" class="seg dex" style="width: 100%;"></div>
+        <div id="cexSeg" class="seg cex" style="width: 0%;"></div>
+        <div id="unknownSeg" class="seg unknown" style="width: 0%;"></div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-dot" style="background:var(--good)"></span> DEX taxable proxy</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--cyan)"></span> CEX internal</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#52525b"></span> Unattributed</span>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="box-header">
+        <h3>Reward Engine & Hurdle Rates</h3>
+      </div>
+      <div class="rows" id="rewardRows"></div>
+    </div>
+  </div>
+
+  <!-- 2-Column Split: Wallet & Pools -->
+  <div class="two">
+    <div class="box">
+      <div class="box-header">
+        <h3>Wallet Payout Tape</h3>
+      </div>
+      <div class="rows" id="walletRows"></div>
+    </div>
+
+    <div class="box">
+      <div class="box-header">
+        <h3>Top On-Chain Pools</h3>
+      </div>
+      <div class="rows" id="poolRows"></div>
+    </div>
+  </div>
+
+  <!-- 2-Column Split: Alerts & Health -->
+  <div class="two">
+    <div class="box">
+      <div class="box-header">
+        <h3>Mechanism Alerts</h3>
+      </div>
+      <div class="alerts" id="alerts"></div>
+    </div>
+
+    <div class="box">
+      <div class="box-header">
+        <h3>Source Health & Telemetry</h3>
+      </div>
+      <div class="srcs" id="sources"></div>
+      <details>
+        <summary>View First-Party / QC Raw Telemetry Payload</summary>
+        <pre id="raw">—</pre>
+      </details>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="foot">
+    <strong>Rare UI Zero-Dependency Real-Time Scanner</strong> · Direct browser-to-node telemetry. Data are live API/RPC observations only; unavailable fields remain unresolved. Mechanical reward proxy is an on-chain proxy, not a guaranteed forecast. No private keys or wallet connections required.
+  </div>
 </div>
-<div class="controls">
- <div class="field wide"><div class="lab">Token mint</div><input id="token" value="HcRLc9VDgjLeK154xDawfb1dmVJ98DoSqcwTHGqiDeJR"></div>
- <div class="field wide"><div class="lab">Reward mint</div><input id="reward" value="A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS"></div>
- <div class="field"><div class="lab">Position</div><input id="position" type="number" value="225600"></div>
- <div class="field"><div class="lab">Native reward</div><input id="native" value="ZEC"></div>
- <div class="field"><div class="lab">Baseline reward / h</div><input id="baseline" type="number" step="0.000001" value="0.00246"></div>
- <button id="refresh">REFRESH</button>
- <div class="field wide" style="grid-column:1/-2"><div class="lab">Wallet (optional — enables direct payout tracking)</div><input id="wallet" placeholder="Solana wallet address"></div>
- <button id="notify">NOTIFY</button>
-</div>
-<div class="regime"><div><div class="k">Regime</div><strong id="regime">—</strong></div><div class="stamp" id="stamp">—</div></div>
-<div class="grid">
- <div class="card"><div class="k">Market cap</div><div class="v" id="mc">—</div><div class="s" id="mcq">DexScreener primary pair</div></div>
- <div class="card"><div class="k">Liquidity</div><div class="v" id="liq">—</div><div class="s" id="liqmc">—</div></div>
- <div class="card"><div class="k">On-chain taxable proxy 1h / 24h</div><div class="v" id="vol">—</div><div class="s" id="turnover">—</div></div>
- <div class="card"><div class="k">ZCAT price</div><div class="v" id="price">—</div><div class="s" id="chg">—</div></div>
- <div class="card"><div class="k">Transfer tax</div><div class="v" id="tax">—</div><div class="s" id="authority">—</div></div>
- <div class="card"><div class="k">Max fee behavior</div><div class="v" id="maxfee">—</div><div class="s" id="capbind">—</div></div>
- <div class="card"><div class="k">Wrapped / native basis</div><div class="v" id="basis">—</div><div class="s" id="rewardpx">—</div></div>
- <div class="card"><div class="k">Executable position</div><div class="v" id="exec">—</div><div class="s" id="haircut">Jupiter 50 bps quote</div></div>
-</div>
-<div class="two">
- <div class="box"><h3>Venue split — reward-bearing vs internal</h3><div class="rows" id="venueRows"></div><div class="splitbar"><div id="dexSeg" class="seg dex"></div><div id="cexSeg" class="seg cex"></div><div id="unknownSeg" class="seg unknown"></div></div><div class="legend"><span>DEX taxable proxy</span><span>CEX internal</span><span>unattributed</span></div></div>
- <div class="box"><h3>Reward engine</h3><div class="rows" id="rewardRows"></div></div>
-</div>
-<div class="two">
- <div class="box"><h3>Wallet payout tape</h3><div class="rows" id="walletRows"></div></div>
- <div class="box"><h3>Top on-chain pools</h3><div class="rows" id="poolRows"></div></div>
-</div>
-<div class="two">
- <div class="box"><h3>Alerts — only mechanism changes matter</h3><div class="alerts" id="alerts"></div></div>
- <div class="box"><h3>Source health</h3><div class="srcs" id="sources"></div><details><summary>First-party / QC raw fields</summary><pre id="raw">—</pre></details></div>
-</div>
-<div class="foot">Zero-dependency real-time scanner. Direct browser-to-node telemetry. Data are live API/RPC observations only; unavailable fields remain unresolved. History is cached locally in browser storage.</div>
-</div>
+
 <script>
-const $=id=>document.getElementById(id);
-let timer=null, lastAlertKeys=new Set();
-const money=x=>x==null?'—':(Math.abs(x)>=1e9?'$'+(x/1e9).toFixed(2)+'B':Math.abs(x)>=1e6?'$'+(x/1e6).toFixed(2)+'M':Math.abs(x)>=1e3?'$'+(x/1e3).toFixed(1)+'K':'$'+Number(x).toFixed(2));
-const num=(x,d=2)=>x==null?'—':Number(x).toLocaleString(undefined,{maximumFractionDigits:d});
-const pc=(x,d=2)=>x==null?'—':(x*100).toFixed(d)+'%';
-const pcn=(x,d=2)=>x==null?'—':Number(x).toFixed(d)+'%';
-const n=(v,d=null)=>{try{return(v===null||v==='')?d:(isNaN(Number(v))?d:Number(v))}catch(e){return d}};
-const pct=(a,b)=>{if(a==null||b==null||b===0)return null;return(a/b-1.0)*100.0};
-function row(a,b){return `<div>${a}</div><div>${b}</div>`}
-function src(name,o){let c=!o||!o.ok?'fail':o.stale?'stale':'ok';let t=!o||!o.ok?'FAIL':o.stale?'STALE':'LIVE';return `<span class="src ${c}">${name} ${t}</span>`}
-function notifyNew(alerts){const keys=new Set(alerts.map(a=>a.key));for(const a of alerts){if(!lastAlertKeys.has(a.key)&&Notification.permission==='granted'){new Notification('ZCAT Sentinel: '+a.level,{body:a.text})}}lastAlertKeys=keys}
+const $ = id => document.getElementById(id);
+let timer = null, lastAlertKeys = new Set();
+const money = x => x == null ? '—' : (Math.abs(x) >= 1e9 ? '$' + (x / 1e9).toFixed(2) + 'B' : Math.abs(x) >= 1e6 ? '$' + (x / 1e6).toFixed(2) + 'M' : Math.abs(x) >= 1e3 ? '$' + (x / 1e3).toFixed(1) + 'K' : '$' + Number(x).toFixed(2));
+const num = (x, d = 2) => x == null ? '—' : Number(x).toLocaleString(undefined, { maximumFractionDigits: d });
+const pc = (x, d = 2) => x == null ? '—' : (x * 100).toFixed(d) + '%';
+const pcn = (x, d = 2) => x == null ? '—' : Number(x).toFixed(d) + '%';
+const n = (v, d = null) => { try { return (v === null || v === '') ? d : (isNaN(Number(v)) ? d : Number(v)) } catch(e) { return d } };
+const pct = (a, b) => { if (a == null || b == null || b === 0) return null; return (a / b - 1.0) * 100.0 };
+function row(a, b) { return `<div>${a}</div><div>${b}</div>`; }
+function src(name, o) {
+  let c = !o || !o.ok ? 'fail' : o.stale ? 'stale' : 'ok';
+  let t = !o || !o.ok ? 'FAIL' : o.stale ? 'STALE' : 'LIVE';
+  return `<span class="src ${c}">${name} ${t}</span>`;
+}
+function notifyNew(alerts) {
+  const keys = new Set(alerts.map(a => a.key));
+  for (const a of alerts) {
+    if (!lastAlertKeys.has(a.key) && Notification.permission === 'granted') {
+      new Notification('ZCAT Sentinel: ' + a.level.toUpperCase(), { body: a.text });
+    }
+  }
+  lastAlertKeys = keys;
+}
 
 const RPC_URL = "https://api.mainnet-beta.solana.com";
 const TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
-const STONK_OPERATOR = "5CEbueQnq1Ym2uSSx2xXds3jQAqT1BDnkA59RZobSPAG";
 const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
-async function rpc(method, params, timeout=12000) {
+async function rpc(method, params, timeout = 12000) {
   const ctrl = new AbortController();
   const tId = setTimeout(() => ctrl.abort(), timeout);
   try {
@@ -567,19 +1261,22 @@ async function scan() {
 
 function render(d) {
   const x = d.dex || {}, m = d.metrics || {}, c = d.contract || {}, f = c.transferFee || {}, ra = d.rewardAsset || {}, j = d.jupiter || {}, w = d.wallet || {}, mech = d.mechanicalRewardProxy || {}, venues = d.venues || {}, vs = venues.split || {}, od = venues.onchainDex || {};
-  $('regime').textContent = d.regime || '—';
-  $('regime').className = (d.regime === 'UNWIND' || d.regime === 'DISLOCATION' || d.regime === 'EXHAUSTION') ? 'bad' : (d.regime === 'EXPANSION' ? 'good' : 'warn');
-  $('stamp').textContent = new Date(d.timestamp).toLocaleString();
+  
+  const regimeEl = $('regime');
+  regimeEl.textContent = d.regime || '—';
+  regimeEl.className = 'regime-pill ' + ((d.regime === 'UNWIND' || d.regime === 'DISLOCATION' || d.regime === 'EXHAUSTION') ? 'bad' : (d.regime === 'EXPANSION' ? 'good' : 'warn'));
+  
+  $('stamp').textContent = 'LAST UPDATED: ' + new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' (' + new Date(d.timestamp).toLocaleDateString() + ')';
   $('mc').textContent = money(x.marketCap);
   $('liq').textContent = money(x.liquidity);
-  $('liqmc').textContent = 'Liquidity / MC ' + pc(m.liquidityMc) + ' · 1h Δ ' + pcn(m.liqChange1hPct);
+  $('liqmc').textContent = 'Liquidity / MC ' + pc(m.liquidityMc) + (m.liqChange1hPct != null ? (' · 1h Δ ' + pcn(m.liqChange1hPct)) : '');
   $('vol').textContent = money(m.dexTaxableProxy1h != null ? m.dexTaxableProxy1h : x.volume1h) + ' / ' + money(m.dexTaxableProxy24h != null ? m.dexTaxableProxy24h : x.volume24h);
   $('turnover').textContent = 'Reward-bearing turnover / MC ' + pc(m.turnoverMc) + ' · pace ' + num(m.volumePace, 2) + '×';
   $('price').textContent = x.tokenPriceUsd == null ? '—' : '$' + Number(x.tokenPriceUsd).toPrecision(5);
   $('chg').textContent = '1h ' + pcn(x.change1h) + ' · 6h ' + pcn(x.change6h) + ' · 24h ' + pcn(x.change24h);
   $('tax').textContent = f.bps == null ? '—' : f.bps + ' bps';
-  $('tax').className = f.bps === 300 ? 'v good' : 'v bad';
-  $('authority').textContent = 'config authority ' + (f.configAuthority == null ? 'NULL ✓' : String(f.configAuthority).slice(0, 8) + '…');
+  $('tax').className = 'v ' + (f.bps === 300 ? 'good' : 'bad');
+  $('authority').textContent = 'config authority: ' + (f.configAuthority == null ? 'NULL ✓' : String(f.configAuthority).slice(0, 8) + '…');
   $('maxfee').textContent = f.maximumFeeTokens == null ? '—' : num(f.maximumFeeTokens, 2) + ' tokens';
   $('capbind').textContent = f.capBindsAboveTokens == null ? '—' : 'cap binds above ~' + num(f.capBindsAboveTokens, 0) + ' tokens / transfer';
   $('basis').textContent = ra.basisPct == null ? '—' : (ra.basisPct >= 0 ? '+' : '') + ra.basisPct.toFixed(2) + '%';
@@ -613,7 +1310,7 @@ function render(d) {
     + row('StonkFun first-party', d.stonkfunSource?.ok ? 'LIVE' : 'UNRESOLVED');
 
   const topPools = od.topPools || (x.pairAddress ? [{ dex: x.dexId, pair: (x.baseSymbol || '?') + ' / ' + (x.quoteSymbol || '?'), volume24h: x.volume24h, liquidity: x.liquidity, isRewardPair: true }] : []);
-  $('poolRows').innerHTML = topPools.slice(0, 6).map(p => row((p.isRewardPair ? '★ ' : '') + (p.dex || '?') + ' ' + (p.pair || ''), money(p.volume24h) + ' / ' + money(p.liquidity))).join('') || '<div style="grid-column:1/-1;color:var(--muted)">No pool data.</div>';
+  $('poolRows').innerHTML = topPools.slice(0, 6).map(p => row((p.isRewardPair ? '★ ' : '') + (p.dex || '?') + ' ' + (p.pair || ''), money(p.volume24h) + ' / ' + money(p.liquidity))).join('') || '<div style="grid-column:1/-1;color:var(--muted)">No pool data available.</div>';
 
   if (d.wallet && d.wallet.wallet) {
     $('walletRows').innerHTML = row('Reward balance', num(w.rewardBalance, 8) + ' ' + d.nativeSymbol)
@@ -623,11 +1320,11 @@ function render(d) {
       + row('Median interval', w.medianIntervalMinutes == null ? '—' : num(w.medianIntervalMinutes, 0) + ' min')
       + row('Attribution', w.velocityConfidence || '—');
   } else {
-    $('walletRows').innerHTML = '<div style="grid-column:1/-1;color:var(--muted)">Paste a public wallet above to enable direct on-chain payout tracking. No signing or wallet connection.</div>';
+    $('walletRows').innerHTML = '<div style="grid-column:1/-1;color:var(--muted)">Paste a public Solana wallet above to inspect direct Token-2022 payout accumulation without signing transactions.</div>';
   }
 
   const alerts = d.alerts || [];
-  $('alerts').innerHTML = alerts.length ? alerts.map(a => `<div class="alert ${a.level}">${a.text}</div>`).join('') : '<div class="alert info">No active meaningful-change trigger beyond configured structural warnings.</div>';
+  $('alerts').innerHTML = alerts.length ? alerts.map(a => `<div class="alert ${a.level}">${a.text}</div>`).join('') : '<div class="alert info">No active anomalies detected across Token-2022 parameters or liquidity.</div>';
   notifyNew(alerts);
 
   $('sources').innerHTML = src('DEX', d.dexSource) + src('GECKO', d.geckoSource) + src('RPC', d.contractSource) + src('JUP', d.jupiterSource) + (d.stonkfunSource ? src('STONKFUN', d.stonkfunSource) : '') + (d.mexcSource ? src('MEXC', d.mexcSource) : '') + (d.lbankSource ? src('LBANK', d.lbankSource) : '') + (d.coinGeckoSource ? src('COINGECKO', d.coinGeckoSource) : '') + (d.walletSource ? src('WALLET', d.walletSource) : '');
